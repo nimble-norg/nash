@@ -1,3 +1,15 @@
-# NimbleOS Alquimist Shell
+# NimbleOS Almquist Shell v0.3
 
+This project is a fork of the original Almquist Shell, focused on updating the codebase for compatibility 
+with modern compilers and operating systems. The primary goal is to resolve legacy syntax issues while 
+strictly preserving the original behavior and core features of the Almquist Shell.
 
+# Licensing and Copyright 
+
+Copyright (C) 1989 by Kenneth Almquist.
+All rights reserved.
+
+Copyright (c) 1991, 1993
+   The regents of the University of California. All rights reserved.
+
+This project includes code derived from the Almquist Shell and from the University of California. See LICENSE.ASH and LICENSE.BSD for more information.
