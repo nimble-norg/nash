@@ -5,10 +5,187 @@
 #include "shell.h"
 #include "builtins.h"
 
+int bltincmd();
+int aliascmd();
+int breakcmd();
+int cdcmd();
+int dotcmd();
+int echocmd();
+int evalcmd();
+int execcmd();
+int exitcmd();
+int expcmd();
+int exportcmd();
+int falsecmd();
+int fdflagscmd();
+int getoptscmd();
+int hashcmd();
+int histcmd();
+int inputrc();
+int jobidcmd();
+int jobscmd();
+int killcmd();
+int localcmd();
+int printfcmd();
+int pwdcmd();
+int readcmd();
+int returncmd();
+int setcmd();
+int setvarcmd();
+int shiftcmd();
+int specialvarcmd();
+int testcmd();
+int timescmd();
+int trapcmd();
+int truecmd();
+int typecmd();
+int ulimitcmd();
+int umaskcmd();
+int unaliascmd();
+int unsetcmd();
+int waitcmd();
+int wordexpcmd();
+int debugcmd();
 
 int (*const builtinfunc[])() = {
+	bltincmd,
+	aliascmd,
+	breakcmd,
+	cdcmd,
+	dotcmd,
+	echocmd,
+	evalcmd,
+	execcmd,
+	exitcmd,
+	expcmd,
+	exportcmd,
+	falsecmd,
+	fdflagscmd,
+	getoptscmd,
+	hashcmd,
+	histcmd,
+	inputrc,
+	jobidcmd,
+	jobscmd,
+	killcmd,
+	localcmd,
+	printfcmd,
+	pwdcmd,
+	readcmd,
+	returncmd,
+	setcmd,
+	setvarcmd,
+	shiftcmd,
+	specialvarcmd,
+	testcmd,
+	timescmd,
+	trapcmd,
+	truecmd,
+	typecmd,
+	ulimitcmd,
+	umaskcmd,
+	unaliascmd,
+	unsetcmd,
+	waitcmd,
+	wordexpcmd,
+	debugcmd,
 };
 
 const struct builtincmd builtincmd[] = {
+	"-u", 0,
+	"command", 0,
+	"#", 0,
+	"MUST", 0,
+	"be", 0,
+	"first", 0,
+	"-u", 1,
+	"alias", 1,
+	"-s", 2,
+	"break", 2,
+	"-s", 2,
+	"continue", 2,
+	"-u", 3,
+	"cd", 3,
+	"chdir", 3,
+	"-s", 4,
+	".", 4,
+	"-u", 5,
+	"echo", 5,
+	"-s", 6,
+	"eval", 6,
+	"-s", 7,
+	"exec", 7,
+	"-s", 8,
+	"exit", 8,
+	"exp", 9,
+	"let", 9,
+	"-s", 10,
+	"export", 10,
+	"-s", 10,
+	"readonly", 10,
+	"-u", 11,
+	"false", 11,
+	"fdflags", 12,
+	"-u", 13,
+	"getopts", 13,
+	"-u", 14,
+	"hash", 14,
+	"-h", 15,
+	"-u", 15,
+	"fc", 15,
+	"inputrc", 16,
+	"jobid", 17,
+	"-u", 18,
+	"jobs", 18,
+	"-u", 19,
+	"kill", 19,
+	"#", 19,
+	"mandated", 19,
+	"by", 19,
+	"posix", 19,
+	"for", 19,
+	"'kill", 19,
+	"%job'", 19,
+	"local", 20,
+	"-u", 21,
+	"printf", 21,
+	"-u", 22,
+	"pwd", 22,
+	"-u", 23,
+	"read", 23,
+	"-s", 24,
+	"return", 24,
+	"-s", 25,
+	"set", 25,
+	"setvar", 26,
+	"-s", 27,
+	"shift", 27,
+	"specialvar", 28,
+	"-u", 29,
+	"test", 29,
+	"-u", 29,
+	"[", 29,
+	"-s", 30,
+	"times", 30,
+	"-s", 31,
+	"trap", 31,
+	"-s", 32,
+	":", 32,
+	"-u", 32,
+	"true", 32,
+	"-u", 33,
+	"type", 33,
+	"-u", 34,
+	"ulimit", 34,
+	"-u", 35,
+	"umask", 35,
+	"-u", 36,
+	"unalias", 36,
+	"-s", 37,
+	"unset", 37,
+	"-u", 38,
+	"wait", 38,
+	"wordexp", 39,
+	"debug", 40,
 	NULL, 0
 };
