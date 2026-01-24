@@ -16,7 +16,9 @@
 
 #include <stdio.h>
 #include <fcntl.h>
-
+#include <string.h>
+#include <stdlib.h>
+#include <unistd.h>
 
 /*
  * OUTFILE is the name of the output file.  Output is initially written
@@ -101,7 +103,10 @@ char *header_files[200];		/* list of header files */
 struct text defines;			/* #define statements */
 struct text decls;			/* declarations */
 int amiddecls;				/* for formatting */
-
+int touch(char *file);
+int gooddefine(char *file);
+int file_changed();
+int match(char *name, char *line);
 
 void readfile(), doevent(), doinclude(), dodecl(), output();
 void addstr(), addchar(), writetext();
@@ -119,9 +124,7 @@ void error();
 
 
 
-main(argc, argv)
-      char **argv;
-      {
+int main(int argc, char **argv) {
       char **ap;
       int fd;
       char c;
@@ -152,10 +155,7 @@ main(argc, argv)
  * Parse an input file.
  */
 
-void
-readfile(fname)
-      char *fname;
-      {
+void readfile(char *fname) {
       FILE *fp;
       char line[1024];
       struct event *ep;
@@ -183,11 +183,7 @@ readfile(fname)
 }
 
 
-int
-match(name, line)
-      char *name;
-      char *line;
-      {
+int match(char *name, char *line) {
       register char *p, *q;
 
       p = name, q = line;
@@ -201,10 +197,7 @@ match(name, line)
 }
 
 
-int
-gooddefine(line)
-      char *line;
-      {
+int gooddefine(char *line) {
       register char *p;
 
       if (! match("#define", line))
@@ -225,12 +218,7 @@ gooddefine(line)
 }
 
 
-void
-doevent(ep, fp, fname)
-      register struct event *ep;
-      FILE *fp;
-      char *fname;
-      {
+void doevent(register struct event *ep, FILE *fp, char *fname) {
       char line[1024];
       int indent;
       char *p;
@@ -265,10 +253,7 @@ doevent(ep, fp, fname)
 }
 
 
-void
-doinclude(line)
-      char *line;
-      {
+void doinclude(char *line) {
       register char *p;
       char *name;
       register char **pp;
@@ -290,11 +275,7 @@ doinclude(line)
 }
 
 
-void
-dodecl(line1, fp)
-      char *line1;
-      FILE *fp;
-      {
+void dodecl(char *line1, FILE *fp) {
       char line[1024];
       register char *p, *q;
 
@@ -336,8 +317,7 @@ dodecl(line1, fp)
  * Write the output to the file OUTTEMP.
  */
 
-void
-output() {
+void output() {
       FILE *fp;
       char **pp;
       struct event *ep;
@@ -365,8 +345,7 @@ output() {
  * Return true if the new output file is different from the old one.
  */
 
-int
-file_changed() {
+int file_changed() {
       register FILE *f1, *f2;
       register int c;
 
@@ -385,10 +364,7 @@ file_changed() {
  * Touch a file.  Returns 0 on failure, 1 on success.
  */
 
-int
-touch(file)
-      char *file;
-      {
+int touch(char *file) {
       int fd;
       char c;
 
@@ -412,11 +388,7 @@ touch(file)
  * character.
  */
 
-void
-addstr(s, text)
-      register char *s;
-      register struct text *text;
-      {
+void addstr(register char *s, register struct text *text) {
       while (*s) {
 	    if (--text->nleft < 0)
 		  addchar(*s++, text);
@@ -426,10 +398,7 @@ addstr(s, text)
 }
 
 
-void
-addchar(c, text)
-      register struct text *text;
-      {
+void addchar(int c, register struct text *text) {
       struct block *bp;
 
       if (--text->nleft < 0) {
@@ -450,11 +419,7 @@ addchar(c, text)
  * Write the contents of a text structure to a file.
  */
 
-void
-writetext(text, fp)
-      struct text *text;
-      FILE *fp;
-      {
+void writetext(struct text *text, FILE *fp) {
       struct block *bp;
 
       if (text->start != NULL) {
@@ -466,11 +431,7 @@ writetext(text, fp)
 
 
 
-FILE *
-ckfopen(file, mode)
-      char *file;
-      char *mode;
-      {
+FILE *ckfopen(char *file, char *mode) {
       FILE *fp;
 
       if ((fp = fopen(file, mode)) == NULL) {
@@ -487,9 +448,8 @@ void *
 #else
 char *
 #endif
-ckmalloc(nbytes) {
+ckmalloc(int nbytes) {
       register char *p;
-      char *malloc();
 
       if ((p = malloc(nbytes)) == NULL)
 	    error("Out of space");
@@ -497,10 +457,7 @@ ckmalloc(nbytes) {
 }
 
 
-char *
-savestr(s)
-      char *s;
-      {
+char *savestr(char *s) {
       register char *p;
 
       p = ckmalloc(strlen(s) + 1);
@@ -510,10 +467,7 @@ savestr(s)
 
 
 
-void
-error(msg)
-      char *msg;
-      {
+void error(char *msg) {
       if (curfile != NULL)
 	    fprintf(stderr, "%s:%d: ", curfile, linno);
       fprintf(stderr, "%s\n", msg);

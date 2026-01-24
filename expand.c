@@ -27,7 +27,7 @@
 #include <sys/stat.h>
 #include "mydirent.h"
 #include "myerrno.h"
-
+#include <unistd.h>
 
 
 /*
@@ -61,7 +61,7 @@ STATIC void argstr(char *, int);
 STATIC void expbackq(union node *, int, int);
 STATIC char *evalvar(char *, int);
 STATIC int varisset(int);
-STATIC void varvalue(int, int, int);
+STATIC void varvalue(char, int, int);
 STATIC void recordregion(int, int, int);
 STATIC void ifsbreakup(char *, struct arglist *);
 STATIC void expandmeta(struct strlist *);
@@ -113,7 +113,7 @@ void expandhere(union node *arg, int fd) {
  * here document expansion.
  */
 
-void expandarg(union node *arg, struct arglist *arglist, full) {
+void expandarg(union node *arg, struct arglist *arglist, int full) {
       struct strlist *sp;
       char *p;
 
@@ -165,9 +165,7 @@ void expandarg(union node *arg, struct arglist *arglist, full) {
  */
 
 STATIC void
-argstr(p, full)
-      register char *p;
-      {
+argstr(register char *p, int full) {
       char c;
 
       for (;;) {
@@ -201,10 +199,7 @@ breakloop:;
  * Expand stuff in backwards quotes.
  */
 
-STATIC void
-expbackq(cmd, quoted, full)
-      union node *cmd;
-      {
+STATIC void expbackq(union node *cmd, int quoted, int full) {
       struct backcmd in;
       int i;
       char buf[128];
@@ -277,7 +272,7 @@ expbackq(cmd, quoted, full)
  * input string.
  */
 
-STATIC char *evalvar(char *p, full) {
+STATIC char *evalvar(char *p, int full) {
       int subtype;
       int flags;
       char *var;
@@ -406,10 +401,7 @@ varisset(name)
  * Add the value of a specialized variable to the stack string.
  */
 
-STATIC void
-varvalue(name, quoted, allow_split)
-      char name;
-      {
+STATIC void varvalue(char name, int quoted, int allow_split) {
       int num;
       char temp[32];
       char *p;
@@ -493,8 +485,7 @@ string:
  * string for IFS characters.
  */
 
-STATIC void
-recordregion(start, end, nulonly) {
+STATIC void recordregion(int start, int end, int nulonly) {
       register struct ifsregion *ifsp;
 
       if (ifslastp == NULL) {
@@ -856,10 +847,7 @@ expsort(str)
 }
 
 
-STATIC struct strlist *
-msort(list, len)
-      struct strlist *list;
-      {
+STATIC struct strlist *msort(struct strlist *list, int len) {
       struct strlist *p, *q;
       struct strlist **lpp;
       int half;

@@ -25,7 +25,9 @@
 #include <varargs.h>
 #endif
 #include "myerrno.h"
-
+#include <string.h>
+#include <sys/ioctl.h>
+#include <unistd.h>
 
 #define OUTBUFSIZ BUFSIZ
 #define BLOCK_OUT -2		/* output to a fixed block of memory */
@@ -63,12 +65,7 @@ RESET {
  * Set up an output file to write to memory rather than a file.
  */
 
-void
-open_mem(block, length, file)
-      char *block;
-      int length;
-      struct output *file;
-      {
+void open_mem(char *block, int length, struct output *file) {
       file->nextc = block;
       file->nleft = --length;
       file->fd = BLOCK_OUT;
@@ -77,27 +74,17 @@ open_mem(block, length, file)
 #endif
 
 
-void
-out1str(p)
-      char *p;
-      {
+void out1str(char *p){
       outstr(p, out1);
 }
 
 
-void
-out2str(p)
-      char *p;
-      {
+void out2str(char *p) {
       outstr(p, out2);
 }
 
 
-void
-outstr(p, file)
-      register char *p;
-      register struct output *file;
-      {
+void outstr(register char *p, register struct output *file) {
       while (*p)
 	    outc(*p++, file);
 }
@@ -106,10 +93,7 @@ outstr(p, file)
 char out_junk[16];
 
 
-void
-emptyoutbuf(dest)
-      struct output *dest;
-      {
+void emptyoutbuf(struct output *dest) {
       int offset;
 
       if (dest->fd == BLOCK_OUT) {
@@ -137,15 +121,13 @@ emptyoutbuf(dest)
 }
 
 
-void
-flushall() {
+void flushall() {
       flushout(&output);
       flushout(&errout);
 }
 
 
-void
-flushout(dest)
+void flushout(dest)
       struct output *dest;
       {
 
@@ -158,8 +140,7 @@ flushout(dest)
 }
 
 
-void
-freestdout() {
+void freestdout() {
       INTOFF;
       if (output.buf) {
 	    ckfree(output.buf);
@@ -171,8 +152,7 @@ freestdout() {
 
 
 #ifdef __STDC__
-void
-outfmt(struct output *file, char *fmt, ...) {
+void outfmt(struct output *file, char *fmt, ...) {
       va_list ap;
 
       va_start(ap, fmt);
@@ -181,8 +161,7 @@ outfmt(struct output *file, char *fmt, ...) {
 }
 
 
-void
-out1fmt(char *fmt, ...) {
+void out1fmt(char *fmt, ...) {
       va_list ap;
 
       va_start(ap, fmt);
@@ -191,8 +170,7 @@ out1fmt(char *fmt, ...) {
 }
 
 
-void
-fmtstr(char *outbuf, int length, char *fmt, ...) {
+void fmtstr(char *outbuf, int length, char *fmt, ...) {
       va_list ap;
       struct output strout;
 
@@ -209,10 +187,7 @@ fmtstr(char *outbuf, int length, char *fmt, ...) {
 
 #else /* not __STDC__ */
 
-void
-outfmt(va_alist)
-      va_dcl
-      {
+void outfmt(int va_alist, int va_dcl) {
       va_list ap;
       struct output *file;
       char *fmt;
@@ -225,10 +200,7 @@ outfmt(va_alist)
 }
 
 
-void
-out1fmt(va_alist)
-      va_dcl
-      {
+void out1fmt(int va_alistz, int va_dcl) {
       va_list ap;
       char *fmt;
 
@@ -239,10 +211,7 @@ out1fmt(va_alist)
 }
 
 
-void
-fmtstr(va_alist)
-      va_dcl
-      {
+void fmtstr(int va_alist, int va_dcl) {
       va_list ap;
       struct output strout;
       char *outbuf;
@@ -287,12 +256,7 @@ static const char digit[17] = "0123456789ABCDEF";
 #endif
 
 
-void
-doformat(dest, f, ap)
-      register struct output *dest;
-      register char *f;		/* format string */
-      va_list ap;
-      {
+void doformat(register struct output *dest, char *f, va_list ap) {
       register char c;
       char temp[TEMPSIZE];
       int flushleft;
@@ -452,12 +416,7 @@ number:		  /* process a number */
  * Version of write which resumes after a signal is caught.
  */
 
-int
-xwrite(fd, buf, nbytes)
-      int fd;
-      char *buf;
-      int nbytes;
-      {
+int xwrite(int fd, char *buf, int nbytes) {
       int ntry;
       int i;
       int n;
@@ -485,8 +444,7 @@ xwrite(fd, buf, nbytes)
  * Version of ioctl that retries after a signal is caught.
  */
 
-int
-xioctl(fd, request, arg) {
+int xioctl(int fd, int request, int arg) {
       int i;
 
       while ((i = ioctl(fd, request, arg)) == -1 && errno == EINTR);

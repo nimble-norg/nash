@@ -17,7 +17,9 @@
 #include <signal.h>
 #include <fcntl.h>
 #include "myerrno.h"
-
+#include <string.h>
+#include <unistd.h>
+#include <stdlib.h>
 
 #define EMPTY -2		/* marks an unused slot in redirtab */
 #define PIPESIZE 4096		/* amount of buffering in a pipe */
@@ -158,7 +160,7 @@ movefd:
 	    f = openhere(redir);
 	    goto movefd;
       default:
-	    abort();
+	    // stdlib.h j√ tem um abort();, caso de errado, descomente e substitua essa linha por "abort();"
       }
       INTON;
 }
@@ -281,8 +283,7 @@ clearredir() {
  * file descriptors left.
  */
 
-int
-copyfd(from, to) {
+int copyfd(int from, int to) {
 #ifdef F_DUPFD
       int newfd;
 

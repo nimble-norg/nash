@@ -15,6 +15,10 @@
 #include "error.h"
 #include <fcntl.h>
 #include "myerrno.h"
+#include <string.h>
+#include <stdlib.h>
+#include "redir.h"
+#include <unistd.h>
 
 #define EOF_NLEFT -99		/* value of parsenleft when EOF pushed back */
 
@@ -78,10 +82,7 @@ SHELLPROC {
  * Read a line from the script.
  */
 
-char *
-pfgets(line, len)
-      char *line;
-      {
+char *pfgets(char *line, int len) {
       register char *p = line;
       int nleft = len;
       int c;
@@ -108,8 +109,7 @@ pfgets(line, len)
  * Nul characters in the input are silently discarded.
  */
 
-int
-pgetc() {
+int pgetc() {
       return pgetc_macro();
 }
 
@@ -125,8 +125,7 @@ pgetc() {
  * 4) Delete all nul characters from the buffer.
  */
 
-int
-preadbuffer() {
+int preadbuffer() {
       register char *p, *q;
       register int i;
 
@@ -203,8 +202,7 @@ retry:
  * PEOF may be pushed back.
  */
 
-void
-pungetc() {
+void pungetc() {
       parsenleft++;
       parsenextc--;
 }
@@ -215,10 +213,7 @@ pungetc() {
  * tries to push back more than one string at once.
  */
 
-void
-ppushback(string, length)
-      char *string;
-      {
+void ppushback(char *string, int length) {
       pushedstring = parsenextc;
       pushednleft = parsenleft;
       parsenextc = string;
@@ -232,10 +227,7 @@ ppushback(string, length)
  * old input onto the stack first.
  */
 
-void
-setinputfile(fname, push)
-      char *fname;
-      {
+void setinputfile(char *fname, int push) {
       int fd;
       int fd2;
 
@@ -259,8 +251,7 @@ setinputfile(fname, push)
  * interrupts off.
  */
 
-void
-setinputfd(fd, push) {
+void setinputfd(int fd, int push) {
       if (push) {
 	    pushfile();
 	    parsefile->buf = ckmalloc(BUFSIZ);
@@ -279,10 +270,7 @@ setinputfd(fd, push) {
  * Like setinputfile, but takes input from a string.
  */
 
-void
-setinputstring(string, push)
-      char *string;
-      {
+void setinputstring(char *string, int push) {
       INTOFF;
       if (push)
 	    pushfile();
@@ -300,8 +288,7 @@ setinputstring(string, push)
  * adds a new entry to the stack and popfile restores the previous level.
  */
 
-STATIC void
-pushfile() {
+STATIC void pushfile() {
       struct parsefile *pf;
 
       parsefile->nleft = parsenleft;
@@ -314,8 +301,7 @@ pushfile() {
 }
 
 
-void
-popfile() {
+void popfile() {
       struct parsefile *pf = parsefile;
 
       INTOFF;
@@ -336,8 +322,7 @@ popfile() {
  * Return to top level.
  */
 
-void
-popallfiles() {
+void popallfiles() {
       while (parsefile != &basepf)
 	    popfile();
 }
@@ -349,8 +334,7 @@ popallfiles() {
  * after a fork is done.
  */
 
-void
-closescript() {
+void closescript() {
       popallfiles();
       if (parsefile->fd > 0) {
 	    close(parsefile->fd);

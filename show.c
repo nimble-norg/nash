@@ -15,20 +15,13 @@
 static shtree(), shcmd(), sharg(), indent();
 
 
-showtree(n)
-      union node *n;
-      {
+void showtree(union node *n) {
       trputs("showtree called\n");
       shtree(n, 1, NULL, stdout);
 }
 
 
-static
-shtree(n, ind, pfx, fp)
-      union node *n;
-      char *pfx;
-      FILE *fp;
-      {
+static shtree(union node *n, int ind, char *pfx, FILE *fp) {
       struct nodelist *lp;
       char *s;
 
@@ -74,11 +67,7 @@ binop:
 
 
 
-static
-shcmd(cmd, fp)
-      union node *cmd;
-      FILE *fp;
-      {
+static shcmd(union node *cmd, FILE *fp) {
       union node *np;
       int first;
       char *s;
@@ -115,11 +104,7 @@ shcmd(cmd, fp)
 
 
 
-static
-sharg(arg, fp)
-      union node *arg;
-      FILE *fp;
-      {
+static sharg(union node *arg, FILE *fp) {
       char *p;
       struct nodelist *bqlist;
 
@@ -152,8 +137,7 @@ sharg(arg, fp)
 }
 
 
-static
-indent(amount, pfx, fp)
+static indent(int amount, char *pfx, FILE *fp)
       char *pfx;
       FILE *fp;
       {
@@ -178,7 +162,7 @@ FILE *tracefile;
 
 
 
-trputc(c) {
+void trputc(int c) {
 #ifdef DEBUG
       if (tracefile == NULL)
 	    return;
@@ -189,9 +173,7 @@ trputc(c) {
 }
 
 
-trace(fmt, a1, a2, a3, a4, a5, a6, a7, a8)
-      char *fmt;
-      {
+void trace(char *fmt, int a1, int a2, int a3, int a4, int a5, int a6, int a7, int a8) {
 #ifdef DEBUG
       if (tracefile == NULL)
 	    return;
@@ -202,9 +184,7 @@ trace(fmt, a1, a2, a3, a4, a5, a6, a7, a8)
 }
 
 
-trputs(s)
-      char *s;
-      {
+void trputs(char *s) {
 #ifdef DEBUG
       if (tracefile == NULL)
 	    return;
@@ -215,9 +195,7 @@ trputs(s)
 }
 
 
-trstring(s)
-      char *s;
-      {
+void trstring(char *s) {
       register char *p;
       char c;
 
@@ -257,9 +235,7 @@ backslash:	  putc('\\', tracefile);
 }
 
 
-trargs(ap)
-      char **ap;
-      {
+void trargs(char **ap) {
 #ifdef DEBUG
       if (tracefile == NULL)
 	    return;
@@ -275,7 +251,7 @@ trargs(ap)
 }
 
 
-opentrace() {
+void opentrace() {
       char s[100];
       char *p;
       char *getenv();

@@ -10,7 +10,7 @@
 #include "error.h"
 #include <sys/types.h>
 #include <sys/stat.h>
-
+#include <stdlib.h>
 
 #define MAXMBOXES 10
 
@@ -26,8 +26,7 @@ STATIC time_t mailtime[MAXMBOXES];	/* times of mailboxes */
  * values.
  */
 
-void
-chkmail(silent) {
+void chkmail(int silent) {
       register int i;
       char *mpath;
       char *p;

@@ -1,10 +1,46 @@
 cd bltin; make 'CC=cc -pipe' 'DEBUG=-g'
 make[1]: Entrando no diretório '/home/mir/nash/bltin'
 
-make[1]: Nada a ser feito para 'all'. 
+cc -pipe -DSHELL -g -c catf.c
+mv catf.o catfcmd.o
+cc -pipe -DSHELL -g -c echo.c
+mv echo.o echocmd.o
+./mkexpr
+cc -pipe -DSHELL -g -c expr.c
+mv expr.o exprcmd.o
+cc -pipe -DSHELL -g -c line.c
+mv line.o linecmd.o
+cc -pipe -DSHELL -g -c nlecho.c
+mv nlecho.o nlechocmd.o
+cc -pipe -g   -c -o operators.o operators.c
+cc -pipe -g   -c -o regexp.o regexp.c
+ar rc bltinlib.a catfcmd.o echocmd.o exprcmd.o linecmd.o nlechocmd.o operators.o regexp.o
+cc -pipe -g   -c -o error.o error.c
+cc -pipe -g   -c -o stalloc.o stalloc.c
+cc -pipe -g -o catf catf.c error.o stalloc.o
+cc -pipe -g -o expr expr.c operators.o regexp.o error.o stalloc.o
+rm -f test '['
+ln expr test
+ln expr '['
 make[1]: Saindo do diretório '/home/mir/nash/bltin'
 
+cc -pipe -o mknodes -g mknodes.c
+./mknodes
+cc -pipe -g  -c main.c
+cc -pipe -g  -c options.c
+cc -pipe -o mksyntax mksyntax.c
+./mksyntax
+signed 8 bit chars
+sh mktokens
+cc -pipe -g  -c parser.c
 cc -pipe -g  -c expand.c
+cc -pipe -o mksignames mksignames.c
+./mksignames
+cc -pipe -g  -c jobs.c
+cc -pipe -g  -c redir.c
+cc -pipe -g  -c exec.c
+cc -pipe -g  -c builtins.c
+cc -pipe -g  -c cd.c
 *** Error code 1
 
 Stop.

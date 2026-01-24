@@ -18,7 +18,8 @@
 #include <sys/types.h>
 #include <sys/stat.h>
 #include "myerrno.h"
-
+#include <unistd.h>
+#include "redir.h"
 
 #ifdef __STDC__
 STATIC int docd(char *, int);
@@ -41,8 +42,7 @@ extern int didudir;		/* set if /u/logname expanded */
 #endif
 
 
-int
-cdcmd(argc, argv)  char **argv; {
+int cdcmd(int argc, char **argv) {
       char *dest;
       char *path;
       char *p;
@@ -75,10 +75,7 @@ cdcmd(argc, argv)  char **argv; {
  */
 
 #if SYMLINKS == 0
-STATIC int
-docd(dest, print)
-      char *dest;
-      {
+STATIC int docd(char *dest, int print) {
 #if UDIR
       if (didudir)
 	    print = 1;
@@ -265,8 +262,7 @@ updatepwd(dir)
 
 
 
-int
-pwdcmd(argc, argv)  char **argv; {
+int pwdcmd(int argc, char **argv) {
       getpwd();
       out1str(curdir);
       out1c('\n');
@@ -284,8 +280,7 @@ pwdcmd(argc, argv)  char **argv; {
 
 #define MAXPWD 256
 
-STATIC void
-getpwd() {
+STATIC void getpwd() {
       char buf[MAXPWD];
       char *p;
       int i;

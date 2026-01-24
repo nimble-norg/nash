@@ -28,7 +28,7 @@
 #include <sys/stat.h>
 #include <fcntl.h>
 #include "myerrno.h"
-
+#include <unistd.h>
 
 #define CMDTABLESIZE 31		/* should be prime */
 #define ARB 1			/* actual size determined at run time */
@@ -71,11 +71,7 @@ STATIC void delete_cmd_entry();
  * have to change the find_command routine as well.
  */
 
-void
-shellexec(argv, envp, path, index)
-      char **argv, **envp;
-      char *path;
-      {
+void shellexec(char **argv, char **envp, char *path, int index) {
       char *cmdname;
       int e;
 
@@ -97,12 +93,7 @@ shellexec(argv, envp, path, index)
 }
 
 
-STATIC void
-tryexec(cmd, argv, envp)
-      char *cmd;
-      char **argv;
-      char **envp;
-      {
+STATIC void tryexec(char *cmd, char **argv, char **envp) {
       int e;
       char *p;
 
@@ -127,7 +118,7 @@ tryexec(cmd, argv, envp)
 	    }
 #endif
 	    setparam(argv + 1);
-	    raise(EXSHELLPROC);
+	    exraise(EXSHELLPROC);
 	    /*NOTREACHED*/
       }
       errno = e;
@@ -265,7 +256,7 @@ padvance(path, name)
 /*** Command hashing code ***/
 
 
-hashcmd(argc, argv)  char **argv; {
+int hashcmd(int argc, char **argv) {
       struct tblentry **pp;
       struct tblentry *cmdp;
       int c;
@@ -345,11 +336,7 @@ printentry(cmdp)
  * change the shellexec routine as well.
  */
 
-void
-find_command(name, entry, printerr)
-      char *name;
-      struct cmdentry *entry;
-      {
+void find_command(char *name, struct cmdentry *entry, int printerr) {
       struct tblentry *cmdp;
       int index;
       int prev;
@@ -565,8 +552,7 @@ changepath(newval)
  * PATH which has changed.
  */
 
-STATIC void
-clearcmdentry(firstchange) {
+STATIC void clearcmdentry(int firstchange) {
       struct tblentry **tblp;
       struct tblentry **pp;
       struct tblentry *cmdp;
@@ -635,10 +621,7 @@ deletefuncs() {
 struct tblentry **lastcmdentry;
 
 
-STATIC struct tblentry *
-cmdlookup(name, add)
-      char *name;
-      {
+STATIC struct tblentry *cmdlookup(char *name, int add) {
       int hashval;
       register char *p;
       struct tblentry *cmdp;

@@ -18,7 +18,8 @@
 #include <varargs.h>	
 #endif
 #include "myerrno.h"
-
+#include <unistd.h>
+#include <stdlib.h>
 
 /*
  * Code to handle exceptions in C.
@@ -37,8 +38,7 @@ char *commandname;
  * stored in the global variable "exception".
  */
 
-void
-raise(e) {
+void exraise(int e) {
       if (handler == NULL)
 	    abort();
       exception = e;
@@ -56,8 +56,7 @@ raise(e) {
  * just defensive programming.)
  */
 
-void
-onint() {
+void onint() {
       if (suppressint) {
 	    intpending++;
 	    return;
@@ -67,17 +66,14 @@ onint() {
       sigsetmask(0);
 #endif
       if (rootshell && iflag)
-	    raise(EXINT);
+	    exraise(EXINT);
       else
 	    _exit(128 + SIGINT);
 }
 
 
 
-void
-error2(a, b)
-      char *a, *b;
-      {
+void error2(char *a, char *b){
       error("%s: %s", a, b);
 }
 
@@ -92,10 +88,7 @@ error2(a, b)
 void
 error(char *msg, ...) {
 #else
-void
-error(va_alist)
-      va_dcl
-      {
+void error(int va_alist, int va_dcl) {
       char *msg;
 #endif
       va_list ap;
@@ -122,7 +115,7 @@ error(va_alist)
       }
       va_end(ap);
       flushall();
-      raise(EXERROR);
+      exraise(EXERROR);
 }
 
 
@@ -168,7 +161,7 @@ STATIC const struct errname errormsg[] = {
 #endif
       ENOMEM, ALL,	"not enough memory",
 #ifdef ENOLINK
-      ENOLINK, ALL,	"remote access failed"
+      ENOLINK, ALL,	"remote access failed",
 #endif
 #ifdef EMULTIHOP
       EMULTIHOP, ALL,	"remote access failed",
@@ -199,8 +192,7 @@ STATIC const struct errname errormsg[] = {
  * Action describes the operation that got the error.
  */
 
-char *
-errmsg(e, action) {
+char *errmsg(int e, int action) {
       struct errname const *ep;
       static char buf[12];
 

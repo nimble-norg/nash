@@ -30,8 +30,8 @@
 #include <sys/time.h>
 #include <sys/resource.h>
 #endif
-
-
+#include<unistd.h>
+#include <sys/wait.h>
 
 struct job *jobtab;		/* array of jobs */
 int njobs;			/* size of array */
@@ -72,8 +72,7 @@ STATIC char *commandtext();
 
 MKINIT int jobctl;
 
-void
-setjobctl(on) {
+void setjobctl(int on) {
       int ldisc;
 
       if (on == jobctl || rootshell == 0)
@@ -126,7 +125,7 @@ SHELLPROC {
 
 
 #if JOBS
-fgcmd(argc, argv)  char **argv; {
+int fgcmd(int argc, char **argv) {
       struct job *jp;
       int pgrp;
       int status;
@@ -144,7 +143,7 @@ fgcmd(argc, argv)  char **argv; {
 }
 
 
-bgcmd(argc, argv)  char **argv; {
+int bgcmd(int argc, char **argv) {
       struct job *jp;
 
       do {
@@ -157,10 +156,7 @@ bgcmd(argc, argv)  char **argv; {
 }
 
 
-STATIC void
-restartjob(jp)
-      struct job *jp;
-      {
+STATIC void restartjob(struct job *jp) {
       struct procstat *ps;
       int i;
 
@@ -179,8 +175,7 @@ restartjob(jp)
 #endif
 
 
-int
-jobscmd(argc, argv)  char **argv; {
+int jobscmd(int argc, char **argv) {
       showjobs(0);
       return 0;
 }
@@ -195,8 +190,7 @@ jobscmd(argc, argv)  char **argv; {
  * will be freed here.
  */
 
-void
-showjobs(change) {
+void showjobs(int change) {
       int jobno;
       int procno;
       int i;
@@ -265,10 +259,7 @@ showjobs(change) {
  * Mark a job structure as unused.
  */
 
-STATIC void
-freejob(jp)
-      struct job *jp;
-      {
+STATIC void freejob(struct job *jp) {
       struct procstat *ps;
       int i;
 
@@ -289,8 +280,7 @@ freejob(jp)
 
 
 
-int
-waitcmd(argc, argv)  char **argv; {
+int waitcmd(int argc, char **argv) {
       struct job *job;
       int status;
       struct job *jp;
@@ -331,7 +321,7 @@ waitcmd(argc, argv)  char **argv; {
 
 
 
-jobidcmd(argc, argv)  char **argv; {
+int jobidcmd(int argc, char **argv) {
       struct job *jp;
       int i;
 
@@ -349,10 +339,7 @@ jobidcmd(argc, argv)  char **argv; {
  * Convert a job name to a job structure.
  */
 
-STATIC struct job *
-getjob(name)
-      char *name;
-      {
+STATIC struct job *getjob(char *name) {
       int jobno;
       register struct job *jp;
       int pid;
@@ -407,10 +394,7 @@ currentjob:
  * Return a new job structure,
  */
 
-struct job *
-makejob(node, nprocs)
-      union node *node;
-      {
+struct job *makejob(union node *node, int nprocs) {
       int i;
       struct job *jp;
 
@@ -467,11 +451,7 @@ makejob(node, nprocs)
  * in a pipeline).
  */
 
-int
-forkshell(jp, n, mode)
-      union node *n;
-      struct job *jp;
-      {
+int forkshell(struct job* jp, union node *n, int mode) {
       int pid;
       int pgrp;
 
@@ -574,10 +554,7 @@ forkshell(jp, n, mode)
  * confuse this approach.
  */
 
-int
-waitforjob(jp)
-      register struct job *jp;
-      {
+int waitforjob(register struct job *jp) {
 #if JOBS
       int mypgrp = getpgrp(0);
 #endif
@@ -622,10 +599,7 @@ waitforjob(jp)
  * Wait for a process to terminate.
  */
 
-STATIC int
-dowait(block, job)
-      struct job *job;
-      {
+STATIC int dowait(int block, struct job *job) {
       int pid;
       int status;
       struct procstat *sp;
@@ -742,16 +716,13 @@ dowait(block, job)
 #ifdef SYSV
 STATIC int gotsigchild;
 
-STATIC int onsigchild() {
+void onsigchild() {
       gotsigchild = 1;
 }
 #endif
 
 
-STATIC int
-waitproc(block, status)
-      int *status;
-      {
+STATIC int waitproc(int block, int *status) {
 #ifdef BSD
       int flags;
 
@@ -765,7 +736,7 @@ waitproc(block, status)
       return wait3((union wait *)status, flags, (struct rusage *)NULL);
 #else
 #ifdef SYSV
-      int (*save)();
+      void (*save)(int);
 
       if (block == 0) {
             gotsigchild = 0;
@@ -794,10 +765,7 @@ STATIC char *cmdnextc;
 STATIC int cmdnleft;
 STATIC void cmdtxt(), cmdputs();
 
-STATIC char *
-commandtext(n)
-      union node *n;
-      {
+STATIC char *commandtext(union node * n) {
       char *name;
 
       cmdnextc = name = ckmalloc(50);
@@ -808,10 +776,7 @@ commandtext(n)
 }
 
 
-STATIC void
-cmdtxt(n)
-      union node *n;
-      {
+STATIC void cmdtxt(union node *n) {
       union node *np;
       struct nodelist *lp;
       char *p;
@@ -933,10 +898,7 @@ redir:
 
 
 
-STATIC void
-cmdputs(s)
-      char *s;
-      {
+STATIC void cmdputs(char *s) {
       register char *p, *q;
       register char c;
       int subtype = 0;

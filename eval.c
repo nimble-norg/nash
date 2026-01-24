@@ -25,7 +25,7 @@
 #include "error.h"
 #include "mystring.h"
 #include <signal.h>
-
+#include <unistd.h>
 
 /* flags in argument to evaltree */
 #define EV_EXIT 01		/* exit after evaluating tree */
@@ -70,7 +70,6 @@ STATIC void prehash();
 #endif
 
 
-
 /*
  * Called to reset things after an exception.
  */
@@ -96,8 +95,11 @@ SHELLPROC {
  * your eval command?  If so, read on....
  */
 
+void trargs(char **ap);
+void trputs(char *s);
+
 #ifdef ELIGANT
-evalcmd(argc, argv)  char **argv; {
+int evalcmd(int argc, char **argv) {
       char **ap;
 
       for (ap = argv + 1 ; *ap ; ap++) {
@@ -112,7 +114,7 @@ evalcmd(argc, argv)  char **argv; {
  * name of compatibility, here it is...
  */
 
-evalcmd(argc, argv)  char **argv; {
+int evalcmd(int argc, char **argv) {
       char *p;
       char *concat;
       char **ap;
@@ -144,10 +146,7 @@ evalcmd(argc, argv)  char **argv; {
  * Execute a command or commands contained in a string.
  */
 
-void
-evalstring(s)
-      char *s;
-      {
+void evalstring(char *s) {
       union node *n;
       struct stackmark smark;
 
@@ -168,10 +167,7 @@ evalstring(s)
  * exitstatus.
  */
 
-void
-evaltree(n, flags)
-      union node *n;
-      {
+void evaltree(union node *n, int flags) {
       if (n == NULL) {
 	    TRACE(("evaltree(NULL) called\n"));
 	    return;
@@ -251,10 +247,7 @@ out:
 }
 
 
-STATIC void
-evalloop(n)
-      union node *n;
-      {
+STATIC void evalloop(union node *n) {
       int status;
 
       loopnest++;
@@ -288,10 +281,7 @@ skipping:	  if (evalskip == SKIPCONT && --skipcount <= 0) {
 
 
 
-STATIC void
-evalfor(n)
-      union node *n;
-      {
+STATIC void evalfor(union node *n) {
       struct arglist arglist;
       union node *argp;
       struct strlist *sp;
@@ -328,10 +318,7 @@ out:
 
 
 
-STATIC void
-evalcase(n, flags)
-      union node *n;
-      {
+STATIC void evalcase(union node *n, int flags) {
       union node *cp;
       union node *patp;
       struct arglist arglist;
@@ -360,10 +347,7 @@ out:
  * Kick off a subshell to evaluate a tree.
  */
 
-STATIC void
-evalsubshell(n, flags)
-      union node *n;
-      {
+STATIC void evalsubshell(union node *n, int flags) {
       struct job *jp;
       int backgnd = (n->type == NBACKGND);
 
@@ -388,10 +372,7 @@ evalsubshell(n, flags)
  * Compute the names of the files in a redirection list.
  */
 
-STATIC void
-expredir(n)
-      union node *n;
-      {
+STATIC void expredir(union node *n) {
       register union node *redir;
 
       for (redir = n ; redir ; redir = redir->nfile.next) {
@@ -415,10 +396,7 @@ expredir(n)
  * of all the rest.)
  */
 
-STATIC void
-evalpipe(n)
-      union node *n;
-      {
+STATIC void evalpipe(union node *n) {
       struct job *jp;
       struct nodelist *lp;
       int pipelen;
@@ -481,11 +459,7 @@ evalpipe(n)
  * Should be called with interrupts off.
  */
 
-void
-evalbackcmd(n, result)
-      union node *n;
-      struct backcmd *result;
-      {
+void evalbackcmd(union node *n, struct backcmd *result) {
       int pip[2];
       struct job *jp;
       struct stackmark smark;		/* unnecessary */
@@ -526,11 +500,7 @@ evalbackcmd(n, result)
  * Execute a simple command.
  */
 
-STATIC void
-evalcommand(cmd, flags, backcmd)
-      union node *cmd;
-      struct backcmd *backcmd;
-      {
+STATIC void evalcommand(union node *cmd, int flags, struct backcmd *backcmd) {
       struct stackmark smark;
       union node *argp;
       struct arglist arglist;
@@ -802,10 +772,7 @@ out:
  * check that the name will not be subject to expansion.
  */
 
-STATIC void
-prehash(n)
-      union node *n;
-      {
+STATIC void prehash(union node *n) {
       struct cmdentry entry;
 
       if (n->type == NCMD && goodname(n->ncmd.args->narg.text))
@@ -824,7 +791,7 @@ prehash(n)
  * specified variables.
  */
 
-bltincmd(argc, argv)  char **argv; {
+int bltincmd(int argc, char **argv) {
       listsetvar(cmdenviron);
       return exitstatus;
 }
@@ -841,7 +808,7 @@ bltincmd(argc, argv)  char **argv; {
  * in the standard shell so we don't make it one here.
  */
 
-breakcmd(argc, argv)  char **argv; {
+int breakcmd(int argc, char **argv) {
       int n;
 
       n = 1;
@@ -861,7 +828,7 @@ breakcmd(argc, argv)  char **argv; {
  * The return command.
  */
 
-returncmd(argc, argv)  char **argv; {
+int returncmd(int argc, char **argv) {
       int ret;
 
       ret = exitstatus;
@@ -875,12 +842,12 @@ returncmd(argc, argv)  char **argv; {
 }
 
 
-truecmd(argc, argv)  char **argv; {
+int truecmd(int argc, char **argv) {
       return 0;
 }
 
 
-execcmd(argc, argv)  char **argv; {
+int execcmd(int argc, char **argv) {
       if (argc > 1) {
 	    iflag = 0;		/* exit on error */
 	    setinteractive(0);

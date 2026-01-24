@@ -20,7 +20,7 @@
 #include "trap.h"
 #include "mystring.h"
 #include <signal.h>
-
+#include <unistd.h>
 
 /*
  * Sigmode records the current value of the signal handlers for the various
@@ -39,11 +39,11 @@ extern char nullstr[1];		/* null string */
 char *trap[MAXSIG+1];		/* trap handler commands */
 MKINIT char sigmode[MAXSIG];	/* current value of signal */
 char gotsig[MAXSIG];		/* indicates specified signal received */
-int sigpending;			/* indicates some signal received */
+int mysigpending;		/* indicates some signal received */
 
 
 #ifdef SYSV
-typedef void (*sigaction)();	/* type returned by signal(2) */
+typedef void (*handler_func_t)();	/* type returned by signal(2) */
 #else
 typedef int (*sigaction)();	/* type returned by signal(2) */
 #endif
@@ -54,7 +54,7 @@ typedef int (*sigaction)();	/* type returned by signal(2) */
  * The trap builtin.
  */
 
-trapcmd(argc, argv)  char **argv; {
+int trapcmd(int argc, char **argv) {
       char *action;
       char **ap;
       int signo;
@@ -94,8 +94,7 @@ trapcmd(argc, argv)  char **argv; {
  * Clear traps on a fork.
  */
 
-void
-clear_traps() {
+void clear_traps() {
       char **tp;
 
       for (tp = trap ; tp <= &trap[MAXSIG] ; tp++) {
@@ -117,10 +116,10 @@ clear_traps() {
  * out what it should be set to.
  */
 
-int
-setsignal(signo) {
+int setsignal(int signo) {
       int action;
-      sigaction sigact;
+      int sigaction;
+      void (*sigact)(int);
       char *t;
       extern void onsig();
 
@@ -170,7 +169,7 @@ setsignal(signo) {
             return 0;
       switch (action) {
 	    case S_DFL:	   sigact = SIG_DFL;		break;
-	    case S_CATCH:  sigact = (sigaction)onsig;	break;
+	    case S_CATCH:  sigact = (handler_func_t)onsig;	break;
 	    case S_IGN:	   sigact = SIG_IGN;		break;
       }
       *t = action;
@@ -183,8 +182,7 @@ setsignal(signo) {
  * Ignore a signal.
  */
 
-void
-ignoresig(signo) {
+void ignoresig(int signo) {
       if (sigmode[signo - 1] != S_IGN && sigmode[signo - 1] != S_HARD_IGN) {
 	    signal(signo, SIG_IGN);
       }
@@ -213,15 +211,14 @@ SHELLPROC {
  * Signal handler.
  */
 
-void
-onsig(signo) {
-      signal(signo, (sigaction)onsig);
+void onsig(int signo) {
+      signal(signo, (handler_func_t)onsig);
       if (signo == SIGINT && trap[SIGINT] == NULL) {
             onint();
             return;
       }
       gotsig[signo - 1] = 1;
-      sigpending++;
+      mysigpending++;
 }
 
 
@@ -231,8 +228,7 @@ onsig(signo) {
  * handlers while we are executing a trap handler.
  */
 
-void
-dotrap() {
+void dotrap() {
       int i;
 
       for (;;) {
@@ -246,7 +242,7 @@ dotrap() {
 	    evalstring(trap[i]);
       }
 done:
-      sigpending = 0;
+      mysigpending = 0;
 }
 
 
@@ -257,8 +253,7 @@ done:
 
 int is_interactive;
 
-void
-setinteractive(on) {
+void setinteractive(int on) {
       if (on == is_interactive)
             return;
       setsignal(SIGINT);
@@ -273,8 +268,7 @@ setinteractive(on) {
  * Called to exit the shell.
  */
 
-void
-exitshell(status) {
+void exitshell(int status) {
       struct jmploc loc1, loc2;
       char *p;
 

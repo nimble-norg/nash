@@ -10,15 +10,14 @@
 #include "error.h"
 #include "machdep.h"
 #include "mystring.h"
-
-
+#include <stdlib.h>
+#include <unistd.h>
 
 /*
  * Like malloc, but returns an error when out of space.
  */
 
-pointer
-ckmalloc(nbytes) {
+pointer ckmalloc(int nbytes) {
       register pointer p;
       pointer malloc();
 
@@ -32,10 +31,7 @@ ckmalloc(nbytes) {
  * Same for realloc.
  */
 
-pointer
-ckrealloc(p, nbytes)
-      register pointer p;
-      {
+pointer ckrealloc(register pointer p, int nbytes) {
       pointer realloc();
 
       if ((p = realloc(p, nbytes)) == NULL)
@@ -48,10 +44,7 @@ ckrealloc(p, nbytes)
  * Make a copy of a string in safe storage.
  */
 
-char *
-savestr(s)
-      char *s;
-      {
+char *savestr(char *s) {
       register char *p;
 
       p = ckmalloc(strlen(s) + 1);
@@ -86,8 +79,7 @@ int herefd = -1;
 
 
 
-pointer
-stalloc(nbytes) {
+pointer stalloc(int nbytes) {
       register char *p;
 
       nbytes = ALIGN(nbytes);
@@ -113,10 +105,7 @@ stalloc(nbytes) {
 }
 
 
-void
-stunalloc(p)
-      pointer p;
-      {
+void stunalloc(pointer p) {
       if (p == NULL) {		/*DEBUG */
 	    write(2, "stunalloc\n", 10);
 	    abort();
@@ -127,20 +116,14 @@ stunalloc(p)
 
 
 
-void
-setstackmark(mark)
-      struct stackmark *mark;
-      {
+void setstackmark(struct stackmark *mark) {
       mark->stackp = stackp;
       mark->stacknxt = stacknxt;
       mark->stacknleft = stacknleft;
 }
 
 
-void
-popstackmark(mark)
-      struct stackmark *mark;
-      {
+void popstackmark(struct stackmark *mark) {
       struct stack_block *sp;
 
       INTOFF;
@@ -165,8 +148,7 @@ popstackmark(mark)
  * part of the block that has been used.
  */
 
-void
-growstackblock() {
+void growstackblock() {
       char *p;
       int newlen = stacknleft * 2 + 100;
       char *oldspace = stacknxt;
@@ -193,8 +175,7 @@ growstackblock() {
 
 
 
-void
-grabstackblock(len) {
+void grabstackblock(int len) {
       len = ALIGN(len);
       stacknxt += len;
       stacknleft -= len;
@@ -221,8 +202,7 @@ grabstackblock(len) {
  */
 
 
-char *
-growstackstr() {
+char *growstackstr() {
       int len = stackblocksize();
       if (herefd >= 0 && len >= 1024) {
 	    xwrite(herefd, stackblock(), len);
@@ -239,8 +219,7 @@ growstackstr() {
  * Called from CHECKSTRSPACE.
  */
 
-char *
-makestrspace() {
+char *makestrspace() {
       int len = stackblocksize() - sstrnleft;
       growstackblock();
       sstrnleft = stackblocksize() - len;
@@ -249,11 +228,7 @@ makestrspace() {
 
 
 
-void
-ungrabstackstr(s, p)
-      char *s;
-      char *p;
-      {
+void ungrabstackstr(char *s, char *p) {
       stacknleft += stacknxt - s;
       stacknxt = s;
       sstrnleft = stacknleft - (p - s);

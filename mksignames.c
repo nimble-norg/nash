@@ -7,7 +7,7 @@
  */
 #include <stdio.h>
 #include <signal.h>
-
+#include <stdlib.h>
 
 
 struct sig {
@@ -113,7 +113,7 @@ char writer[] = "\
 
 
 
-main(argc, argv)  char **argv; {
+int main(int argc, char **argv) {
       FILE *cfile, *hfile;	
       struct sig *sigp;
       int maxsig;

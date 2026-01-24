@@ -56,7 +56,7 @@ const struct varinit varinit[] = {
       {&vpath,	VSTRFIXED|VTEXTFIXED,		"PATH=:/bin:/usr/bin"},
       {&vps1,	VSTRFIXED|VTEXTFIXED,		"PS1=@ "},
       {&vps2,	VSTRFIXED|VTEXTFIXED,		"PS2=> "},
-      {&vvers,	VSTRFIXED|VTEXTFIXED,		"SHELLVERS=ash 0.2"},
+      {&vvers,	VSTRFIXED|VTEXTFIXED,		"SHELLVERS=nash 0.2"},
 #if ATTY
       {&vterm,	VSTRFIXED|VTEXTFIXED|VUNSET,	"TERM="},
 #endif
@@ -75,7 +75,7 @@ STATIC struct var **hashvar();
 STATIC int varequal();
 #endif
 
-
+int unsetcmd(int argc, char **argv);
 
 /*
  * Initialize the varable symbol tables and import the environment
@@ -102,8 +102,7 @@ INIT {
  * shell is initialized and again when a shell procedure is spawned.
  */
 
-void
-initvar() {
+void initvar() {
       const struct varinit *ip;
       struct var *vp;
       struct var **vpp;
@@ -126,10 +125,7 @@ initvar() {
  * flags of the variable.  If val is NULL, the variable is unset.
  */
 
-void
-setvar(name, val, flags)
-      char *name, *val;
-      {
+void setvar(char *name, char *val, int flags) {
       char *p, *q;
       int len;
       int namelen;
@@ -177,10 +173,7 @@ setvar(name, val, flags)
  * will go away.
  */
 
-void
-setvareq(s, flags)
-      char *s;
-      {
+void setvareq(char *s, int flags) {
       struct var *vp, **vpp;
 
       vpp = hashvar(s);
@@ -218,10 +211,7 @@ setvareq(s, flags)
  * Process a linked list of variable assignments.
  */
 
-void
-listsetvar(list)
-      struct strlist *list;
-      {
+void listsetvar(struct strlist *list) {
       struct strlist *lp;
 
       INTOFF;
@@ -237,10 +227,7 @@ listsetvar(list)
  * Find the value of a variable.  Returns NULL if not set.
  */
 
-char *
-lookupvar(name)
-      char *name;
-      {
+char *lookupvar(char *name) {
       struct var *v;
 
       for (v = *hashvar(name) ; v ; v = v->next) {
@@ -261,10 +248,7 @@ lookupvar(name)
  * exported.
  */
 
-char *
-bltinlookup(name, doall)
-      char *name;
-      {
+char *bltinlookup(char *name, int doall) {
       struct strlist *sp;
       struct var *v;
 
@@ -290,8 +274,7 @@ bltinlookup(name, doall)
  * the third argument to execve when executing a program.
  */
 
-char **
-environment() {
+char **environment() {
       int nenv;
       struct var **vpp;
       struct var *vp;
@@ -361,8 +344,7 @@ shprocvar() {
  * any variables.
  */
 
-int
-showvarscmd(argc, argv)  char **argv; {
+int showvarscmd(int argc, char **argv) {
       struct var **vpp;
       struct var *vp;
 
@@ -381,8 +363,7 @@ showvarscmd(argc, argv)  char **argv; {
  * The export and readonly commands.
  */
 
-int
-exportcmd(argc, argv)  char **argv; {
+int exportcmd(int argc, char **argv) {
       struct var **vpp;
       struct var *vp;
       char *name;
@@ -425,7 +406,7 @@ found:;
  * The "local" command.
  */
 
-localcmd(argc, argv)  char **argv; {
+int localcmd(int argc, char **argv) {
       char *name;
 
       if (! in_function())
@@ -444,10 +425,7 @@ localcmd(argc, argv)  char **argv; {
  * "-" as a special case.
  */
 
-void
-mklocal(name)
-      char *name;
-      {
+void mklocal(char *name) {
       struct localvar *lvp;
       struct var **vpp;
       struct var *vp;
@@ -488,8 +466,7 @@ mklocal(name)
  * Called after a function returns.
  */
 
-void
-poplocalvars() {
+void poplocalvars() {
       struct localvar *lvp;
       struct var *vp;
 
@@ -512,7 +489,7 @@ poplocalvars() {
 }
 
 
-setvarcmd(argc, argv)  char **argv; {
+int setvarcmd(int argc, char **argv) {
       if (argc <= 2)
 	    return unsetcmd(argc, argv);
       else if (argc == 3)
@@ -529,7 +506,7 @@ setvarcmd(argc, argv)  char **argv; {
  * with the same name.
  */
 
-unsetcmd(argc, argv)  char **argv; {
+int unsetcmd(int argc, char **argv) {
       char **ap;
 
       for (ap = argv + 1 ; *ap ; ap++) {
@@ -544,10 +521,7 @@ unsetcmd(argc, argv)  char **argv; {
  * Unset the specified variable.
  */
 
-STATIC void
-unsetvar(s)
-      char *s;
-      {
+STATIC void unsetvar(char *s) {
       struct var **vpp;
       struct var *vp;
 
@@ -579,10 +553,7 @@ unsetvar(s)
  * Find the appropriate entry in the hash table from the name.
  */
 
-STATIC struct var **
-hashvar(p)
-      register char *p;
-      {
+STATIC struct var **hashvar(register char *p) {
       unsigned int hashval;
 
       hashval = *p << 4;
@@ -599,10 +570,7 @@ hashvar(p)
  * either '=' or '\0'.
  */
 
-STATIC int
-varequal(p, q)
-      register char *p, *q;
-      {
+STATIC int varequal(register char *p, register char *q) {
       while (*p == *q++) {
 	    if (*p++ == '=')
 		  return 1;

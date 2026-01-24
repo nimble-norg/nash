@@ -18,7 +18,7 @@
 #include "syntax.h"
 #include "error.h"
 #include "mystring.h"
-
+#include <stdlib.h>
 
 char nullstr[1];		/* zero length string */
 
@@ -29,12 +29,7 @@ char nullstr[1];		/* zero length string */
  *		truncation is performed.  "Size" is the size of "to".
  */
 
-void
-scopyn(from, to, size)
-      register char const *from;
-      register char *to;
-      register int size;
-      {
+void scopyn(register char const *from, register char *to, register int size) {
 
       while (--size > 0) {
             if ((*to++ = *from++) == '\0')
@@ -49,11 +44,7 @@ scopyn(from, to, size)
  */
 
 #ifndef SYS5
-char *
-mystrchr(s, charwanted)
-      char const *s;
-      register char charwanted;
-      {
+char *mystrchr(char const *s, register char charwanted) {
       register char const *scan;
 
       /*
@@ -74,12 +65,7 @@ mystrchr(s, charwanted)
  * This routine was derived from code by Henry Spencer.
  */
 
-void
-mybcopy(src, dst, length)
-      pointer dst;
-      const pointer src;
-      register int length;
-      {
+void mybcopy(const pointer src, pointer dst, register int length) {
       register char *d = dst;
       register char *s = src;
 
@@ -92,11 +78,7 @@ mybcopy(src, dst, length)
  * prefix -- see if pfx is a prefix of string.
  */
 
-int
-prefix(pfx, string)
-      register char const *pfx;
-      register char const *string;
-      {
+int prefix(register char const *pfx, register char const *string) {
       while (*pfx) {
 	    if (*pfx++ != *string++)
 		  return 0;
@@ -110,10 +92,7 @@ prefix(pfx, string)
  * failure.
  */
 
-int
-number(s)
-      const char *s;
-      {
+int number(const char *s) {
 
       if (! is_number(s))
 	    error2("Illegal number", (char *)s);
@@ -126,10 +105,7 @@ number(s)
  * Check for a valid number.  This should be elsewhere.
  */
 
-int
-is_number(p)
-      register const char *p;
-      {
+int is_number(register const char *p) {
       do {
 	    if (! is_digit(*p))
 		  return 0;

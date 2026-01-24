@@ -13,6 +13,8 @@
 #include "memalloc.h"
 #include "error.h"
 #include "mystring.h"
+#include <sys/stat.h>
+#include <unistd.h>
 
 #undef eflag
 
@@ -26,7 +28,7 @@ extern char **argptr;		/* argument list for builtin command */
  * This uses unbuffered input, which may be avoidable in some cases.
  */
 
-readcmd(argc, argv)  char **argv; {
+int readcmd(int argc, char **argv) {
       char **ap;
       int backslash;
       char c;
@@ -106,7 +108,7 @@ readcmd(argc, argv)  char **argv; {
 
 
 
-umaskcmd(argc, argv)  char **argv; {
+int umaskcmd(int argc, char **argv) {
       int mask;
       char *p;
       int i;
