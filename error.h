@@ -56,13 +56,13 @@ extern char *commandname;	/* name of command--printed on error */
 #define int_pending() intpending
 
 #ifdef __STDC__
-void raise(int);
+void exraise(int);
 void onint(void);
 void error2(char *, char *);
 void error(char *, ...);
 char *errmsg(int, int);
 #else
-void raise();
+void exraise();
 void onint();
 void error2();
 void error();

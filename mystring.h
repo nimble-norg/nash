@@ -17,7 +17,6 @@ int number(const char *);
 int is_number(const char *);
 int strcmp(const char *, const char *);	/* from C library */
 char *strcpy(char *, const char *);	/* from C library */
-int strlen(const char *);		/* from C library */
 char *strcat(char *, const char *);	/* from C library */
 #else
 void scopyn();
@@ -32,6 +31,8 @@ int strlen();
 char *strcat();
 #endif
 
+
+#include <string.h>
 #define equal(s1, s2)	(strcmp(s1, s2) == 0)
 #define scopy(s1, s2)	((void)strcpy(s2, s1))
-#define bcopy(src, dst, n)	mybcopy((pointer)(src), (pointer)(dst), n)
+#define bcopy(src, dst, n)	mybcopy((void *)(src), (void *)(dst), n)

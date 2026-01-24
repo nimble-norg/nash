@@ -16,7 +16,7 @@
 #include "memalloc.h"
 #include "error.h"
 #include "mystring.h"
-
+#include <unistd.h>
 
 const char optchar[10] = "efIijnsxz";	/* shell flags */
 char optval[10];		/* values of option flags */
@@ -31,7 +31,7 @@ char *minusc;			/* argument to -c option */
 
 #ifdef __STDC__
 STATIC void options(int);
-STATIC void setoption(int, int);
+STATIC void setoption(char flag, int val);
 #else
 STATIC void options();
 STATIC void setoption();
@@ -43,10 +43,7 @@ STATIC void setoption();
  * Process the shell command line arguments.
  */
 
-void
-procargs(argc, argv)
-      char **argv;
-      {
+void procargs(int argc, char **argv) {
       char *p;
 
       argptr = argv;
@@ -86,8 +83,7 @@ procargs(argc, argv)
  * to the argument list; we advance it past the options.
  */
 
-STATIC void
-options(cmdline) {
+void options(int cmdline) {
       register char *p;
       int val;
       int c;
@@ -123,11 +119,7 @@ options(cmdline) {
 }
 
 
-STATIC void
-setoption(flag, val)
-      char flag;
-      int val;
-      {
+STATIC void setoption(char flag, int val) {
       register char *p;
 
       if ((p = strchr(optchar, flag)) == NULL)
@@ -153,10 +145,7 @@ SHELLPROC {
  * Set the shell parameters.
  */
 
-void
-setparam(argv)
-      char **argv;
-      {
+void setparam(char **argv) {
       char **newparam;
       char **ap;
       int nparam;
@@ -179,10 +168,7 @@ setparam(argv)
  * Free the list of positional parameters.
  */
 
-void
-freeparam(param)
-      struct shparam *param;
-      {
+void freeparam(struct shparam *param) {
       char **ap;
 
       if (param->malloc) {
@@ -198,7 +184,7 @@ freeparam(param)
  * The shift builtin command.
  */
 
-shiftcmd(argc, argv)  char **argv; {
+int shiftcmd(int argc, char **argv) {
       int n;
       char **ap1, **ap2;
 
@@ -226,7 +212,7 @@ shiftcmd(argc, argv)  char **argv; {
  * The set command builtin.
  */
 
-setcmd(argc, argv)  char **argv; {
+int setcmd(int argc, char **argv) {
       if (argc == 1)
 	    return showvarscmd(argc, argv);
       INTOFF;
@@ -248,7 +234,7 @@ setcmd(argc, argv)  char **argv; {
  * then it's the first time getopts has been called.
  */
 
-getoptscmd(argc, argv)  char **argv; {
+int getoptscmd(int argc, char **argv) {
       register char *p, *q;
       char c;
       char s[10];

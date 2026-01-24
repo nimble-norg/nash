@@ -110,8 +110,7 @@ STATIC void putprompt();
  * valid parse tree indicating a blank line.)
  */
 
-union node *
-parsecmd(interact) {
+STATIC union node *parsecmd(int interact) {
       int t;
 
       doprompt = interact;
@@ -128,7 +127,7 @@ parsecmd(interact) {
 
 
 STATIC union node *
-list(nlflag) {
+list(int nlflag) {
       union node *n1, *n2, *n3;
 
       checkkwd();
@@ -610,7 +609,7 @@ readtoken() {
 
 STATIC int
 xxreadtoken() {
-      register c;
+      register int c;
 
       if (tokpushback) {
 	    tokpushback = 0;
@@ -702,7 +701,7 @@ readtoken1(firstc, syntax, eofmark, striptabs)
       char *eofmark;
       int striptabs;
       {
-      register c = firstc;
+      register int c = firstc;
       register char *out;
       int len;
       char line[EOFMARKLEN + 1];
@@ -1019,7 +1018,7 @@ parsebackq: {
 		  ckfree(str);
 	    parsebackquote = 0;
 	    handler = savehandler;
-	    longjmp(handler, 1);
+	    void longjmp(jmp_buf env, int val);
       }
       INTOFF;
       str = NULL;
@@ -1184,8 +1183,7 @@ goodname(name)
  * occur at this point.
  */
 
-STATIC void
-synexpect(token) {
+STATIC void synexpect(int token) {
       char msg[64];
 
       if (token >= 0) {

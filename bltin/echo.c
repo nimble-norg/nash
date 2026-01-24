@@ -13,7 +13,7 @@
 #define eflag 1
 
 
-main(argc, argv)  char **argv; {
+int main(int argc, char **argv) {
       register char **ap;
       register char *p;
       register char c;

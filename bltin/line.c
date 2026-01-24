@@ -10,9 +10,9 @@
 #define main linecmd
 
 #include "bltin.h"
+#include <unistd.h>
 
-
-main(argc, argv)  char **argv; {
+int main(int argc, char **argv) {
       char c;
 
       for (;;) {

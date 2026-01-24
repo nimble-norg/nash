@@ -13,7 +13,8 @@
 #include "../error.h"
 #include <sys/param.h>
 #include <fcntl.h>
-
+#include <stdlib.h>
+#include <unistd.h>
 
 #ifdef SBUFSIZE
 #define BUFSIZE() SBUFSIZE
@@ -24,9 +25,9 @@
 #define BUFSIZE() BSIZE
 #endif
 #endif
+#define BSIZE 1024
 
-
-main(argc, argv)  char **argv; {
+int main(int argc, char **argv) {
       char *filename;
       char *buf = stalloc(BUFSIZE());
       int fd;
@@ -43,7 +44,7 @@ main(argc, argv)  char **argv; {
       if (setjmp(jmploc.loc)) {
 	    close(input);
 	    handler = savehandler;
-	    longjmp(handler, 1);
+	    longjmp((void *)handler, 1);
       }
       savehandler = handler;
       handler = &jmploc;

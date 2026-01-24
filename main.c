@@ -6,6 +6,7 @@
 
 
 #include <signal.h>
+#include <unistd.h>
 #include <fcntl.h>
 #include "shell.h"
 #include "main.h"
@@ -25,6 +26,7 @@
 #include "error.h"
 #include "init.h"
 #include "mystring.h"
+#include "exec.h"
 
 #define PROFILE 0
 
@@ -47,7 +49,6 @@ STATIC void read_profile();
 char *getenv();
 #endif
 
-
 /*
  * Main routine.  We initialize things, parse the arguments, execute
  * profiles if we're a login shell, and then call cmdloop to execute
@@ -56,7 +57,7 @@ char *getenv();
  * is used to figure out how far we had gotten.
  */
 
-main(argc, argv)  char **argv; {
+int main(int argc, char **argv) {
       struct jmploc jmploc;
       struct stackmark smark;
       volatile int state;
@@ -139,8 +140,7 @@ state3:
  * loop; it turns on prompting if the shell is interactive.
  */
 
-void
-cmdloop(top) {
+void cmdloop(int top) {
       union node *n;
       struct stackmark smark;
       int inter;
@@ -191,10 +191,7 @@ cmdloop(top) {
  * Read /etc/profile or .profile.  Return on error.
  */
 
-STATIC void
-read_profile(name)
-      char *name;
-      {
+void read_profile(char *name) {
       int fd;
 
       INTOFF;
@@ -213,10 +210,7 @@ read_profile(name)
  * Read a file containing shell functions.
  */
 
-void
-readcmdfile(name)
-      char *name;
-      {
+void readcmdfile(char *name) {
       int fd;
 
       INTOFF;
@@ -236,7 +230,7 @@ readcmdfile(name)
  * search for the file, but a path search doesn't make any sense.
  */
 
-dotcmd(argc, argv)  char **argv; {
+int dotcmd(int argc, char **argv) {
       exitstatus = 0;
       if (argc >= 2) {		/* That's what SVR2 does */
 	    setinputfile(argv[1], 1);
@@ -248,14 +242,14 @@ dotcmd(argc, argv)  char **argv; {
 }
 
 
-exitcmd(argc, argv)  char **argv; {
+int exitcmd(int argc, char **argv) {
       if (argc > 1)
 	    exitstatus = number(argv[1]);
       exitshell(exitstatus);
 }
 
 
-lccmd(argc, argv)  char **argv; {
+int lccmd(int argc, char **argv) {
       if (argc > 1) {
 	    defun(argv[1], prevcmd);
 	    return 0;

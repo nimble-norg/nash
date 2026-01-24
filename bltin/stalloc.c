@@ -5,14 +5,11 @@
  */
 
 #include "../shell.h"
-
+#include <stdlib.h>
 
 void error();
-pointer malloc();
 
-
-pointer
-stalloc(nbytes) {
+char *stalloc(size_t nbytes) {
       register pointer p;
 
       if ((p = malloc(nbytes)) == NULL)

@@ -13,7 +13,8 @@
 #include "operators.h"
 #include <sys/types.h>
 #include <sys/stat.h>
-
+#include <string.h>
+#include <unistd.h>
 
 #define STACKSIZE 12
 #define NESTINCR 16
@@ -58,7 +59,7 @@ extern short number_parens;	/* number of \( \) pairs */
 
 
 #ifdef __STDC__
-int expr_is_false(struct value *);
+int expr_is_false(struct value *val);
 void expr_operator(int, struct value *, struct filestat *);
 int lookup_op(char *, char *const*);
 char *re_compile(char *);	/* defined in regexp.c */
@@ -75,7 +76,7 @@ long atol();
 
 
 
-main(argc, argv)  char **argv; {
+int main(int argc, char **argv) {
       char **ap;
       char *opname;
       char c;
@@ -244,10 +245,7 @@ done:
 }
 
 
-int
-expr_is_false(val)
-      struct value *val;
-      {
+int expr_is_false(struct value *val) {
       if (val->type == STRING) {
 	    if (val->u.string[0] == '\0')
 		  return 1;
@@ -268,12 +266,7 @@ expr_is_false(val)
  * to stat, to avoid repeated stat calls on the same file.
  */
 
-void
-expr_operator(op, sp, fs)
-      int op;
-      struct value *sp;
-      struct filestat *fs;
-      {
+void expr_operator(int op, struct value *sp, struct filestat *fs) {
       int i;
 
       switch (op) {
@@ -441,11 +434,7 @@ filebit:
 }
 
 
-int
-lookup_op(name, table)
-      char *name;
-      char *const*table;
-      {
+int lookup_op(char *name, char *const *table) {
       register char *const*tp;
       register char const *p;
       char c = name[1];

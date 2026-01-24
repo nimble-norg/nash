@@ -10,6 +10,7 @@
 
 #include "../shell.h"
 #include "../mystring.h"
+#include <stdlib.h>
 #ifdef SHELL
 #include "../output.h"
 #define stdout out1

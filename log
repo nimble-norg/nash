@@ -1,0 +1,11 @@
+cd bltin; make 'CC=cc -pipe' 'DEBUG=-g'
+make[1]: Entrando no diretório '/home/mir/nash/bltin'
+
+make[1]: Nada a ser feito para 'all'. 
+make[1]: Saindo do diretório '/home/mir/nash/bltin'
+
+cc -pipe -g  -c expand.c
+*** Error code 1
+
+Stop.
+bmake: stopped in /home/mir/nash

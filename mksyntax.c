@@ -8,7 +8,16 @@
 
 #include <stdio.h>
 #include "parser.h"
+#include <stdlib.h>
+#include <string.h>
 
+
+void digit_convert();
+void print(char *name);
+void filltable(char *dftval);
+int init();
+void add(char *p, char *type);
+void output_type_macros();
 
 struct synclass {
       char *name;
@@ -62,7 +71,7 @@ int nbits;		/* number of bits in a character */
 int digit_contig;	/* true if digits are contiguous */
 
 
-main() {
+int main() {
       char c;
       char d;
       int sign;
@@ -187,9 +196,7 @@ main() {
  * Clear the syntax table.
  */
 
-filltable(dftval)
-      char *dftval;
-      {
+void filltable(char *dftval) {
       int i;
 
       for (i = 0 ; i < size ; i++)
@@ -201,7 +208,7 @@ filltable(dftval)
  * Initialize the syntax table with default values.
  */
 
-init() {
+int init() {
       filltable("CWORD");
       syntax[0] = "CEOF";
       syntax[base + CTLESC] = "CCTL";
@@ -216,9 +223,7 @@ init() {
  * Add entries to the syntax table.
  */
 
-add(p, type)
-      char *p, *type;
-      {
+void add(char *p, char *type) {
       while (*p)
 	    syntax[*p++ + base] = type;
 }
@@ -229,9 +234,7 @@ add(p, type)
  * Output the syntax table.
  */
 
-print(name)
-      char *name;
-      {
+void print(char *name) {
       int i;
       int col;
 
@@ -271,7 +274,7 @@ char *macro[] = {
       NULL
 };
 
-output_type_macros() {
+void output_type_macros() {
       char **pp;
 
       if (digit_contig)
@@ -290,7 +293,7 @@ output_type_macros() {
  * Output digit conversion table (if digits are not contiguous).
  */
 
-digit_convert() {
+void digit_convert() {
       int maxdigit;
       static char digit[] = "0123456789";
       char *p;

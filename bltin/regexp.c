@@ -27,13 +27,10 @@
 char *match_begin[10];
 short match_length[10];
 short number_parens;
+int match(char *pattern, char *string);
 
 
-
-char *
-re_compile(pattern)
-	char *pattern;
-	{
+char *re_compile(char *pattern) {
 	register char *p;
 	register char c;
 	char *comp;
@@ -47,8 +44,7 @@ re_compile(pattern)
 	char stack[10];
 	int paren_num;
 	int i;
-	char *malloc();
-
+	
 	p = pattern;
 	if (*p == '^')
 		p++;
@@ -175,12 +171,9 @@ out:
 
 
 
-re_match(pattern, string)
-	char *pattern;
-	char *string;
-	{
+int re_match(char *pattern, char *string) {
 	char **pp;
-	static int match();
+	int match();
 
 	match_begin[0] = string;
 	for (pp = &match_begin[1] ; pp <= &match_begin[9] ; pp++)
@@ -190,11 +183,7 @@ re_match(pattern, string)
 
 
 
-static
-match(pattern, string)
-	char *pattern;
-	char *string;
-	{
+int match(char *pattern, char *string) {
 	register char *p, *q;
 	int counting;
 	int low, high, count;

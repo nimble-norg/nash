@@ -8,7 +8,8 @@
  */
 
 #include <stdio.h>
-
+#include <string.h>
+#include <stdlib.h>
 
 #define MAXTYPES 50		/* max number of node types */
 #define MAXFIELDS 20		/* max fields in a structure */
@@ -46,33 +47,42 @@ struct str str[MAXTYPES];	/* the structures */
 struct str *curstr;		/* current structure */
 
 
-FILE *infp = stdin;
+FILE *infp;
 char line[1024];
 int linno;
 char *linep;
 
-
+void error(char *msg, int a1, int a2, int a3, int a4, int a5, int a6);
 char *savestr();
+void parsenode();
+void parsefield();
+void output(FILE *hfile, FILE *cfile, FILE *patfile);
+void outsizes(FILE *cfile);
+void outfunc(FILE *cfile, int calcsize);
+void skipbl();
+void indent(int amount, FILE *fp);
+int nextfield(char *buf);
+int readline();
+
 #define equal(s1, s2)	(strcmp(s1, s2) == 0)
 
 
-main(argc, argv)
-      char **argv;
-      {
+int main(int argc, char **argv) {
+      infp = stdin;
       if ((infp = fopen("nodetypes", "r")) == NULL)
-	    error("Can't open nodetypes");
+	    error("Can't open nodetypes", 0, 0, 0, 0, 0, 0);
       while (readline()) {
 	    if (line[0] == ' ' || line[0] == '\t')
 		  parsefield();
 	    else if (line[0] != '\0')
 		  parsenode();
       }
-      output();
+      output(stdout, stdout, stdout);
 }
 
 
 
-parsenode() {
+void parsenode() {
       char name[BUFLEN];
       char tag[BUFLEN];
       struct str *sp;
@@ -81,9 +91,9 @@ parsenode() {
 	    curstr->done = 1;
       nextfield(name);
       if (! nextfield(tag))
-	    error("Tag expected");
+	    error("Tag expected", 0, 0, 0, 0, 0, 0);
       if (*linep != '\0')
-	    error("Garbage at end of line");
+	    error("Garbage at end of line", 0, 0, 0, 0, 0, 0);
       nodename[ntypes] = savestr(name);
       for (sp = str ; sp < str + nstr ; sp++) {
 	    if (equal(sp->tag, tag))
@@ -100,18 +110,18 @@ parsenode() {
 }
 
 
-parsefield() {
+void parsefield() {
       char name[BUFLEN];
       char type[BUFLEN];
       char decl[2 * BUFLEN];
       struct field *fp;
 
       if (curstr == NULL || curstr->done)
-	    error("No current structure to add field to");
+	    error("No current structure to add field to", 0, 0, 0, 0, 0, 0);
       if (! nextfield(name))
-	    error("No field name");
+	    error("No field name", 0, 0, 0, 0 ,0 ,0);
       if (! nextfield(type))
-	    error("No field type");
+	    error("No field type", 0, 0, 0, 0, 0, 0);
       fp = &curstr->field[curstr->nfields];
       fp->name = savestr(name);
       if (equal(type, "nodeptr")) {
@@ -131,14 +141,14 @@ parsefield() {
       } else if (equal(type, "temp")) {
 	    fp->type = T_TEMP;
       } else {
-	    error("Unknown type %s", type);
+	    error("Unknown type", 0, 0, 0, 0, 0, 0);
       }
       if (fp->type == T_OTHER || fp->type == T_TEMP) {
 	    skipbl();
 	    fp->decl = savestr(linep);
       } else {
 	    if (*linep)
-		  error("Garbage at end of line");
+		  error("Garbage at end of line", 0, 0, 0, 0, 0, 0);
 	    fp->decl = savestr(decl);
       }
       curstr->nfields++;
@@ -151,21 +161,18 @@ char writer[] = "\
  */\n\
 \n";
 
-output() {
-      FILE *hfile;
-      FILE *cfile;
-      FILE *patfile;
+void output(FILE *hfile, FILE *cfile, FILE *patfile) {
       int i;
       struct str *sp;
       struct field *fp;
       char *p;
 
       if ((patfile = fopen("nodes.c.pat", "r")) == NULL)
-	    error("Can't open nodes.c.pat");
+	    error("Can't open nodes.c.pat", 0, 0, 0, 0, 0, 0);
       if ((hfile = fopen("nodes.h", "w")) == NULL)
-	    error("Can't create nodes.h");
+	    error("Can't create nodes.h", 0, 0, 0, 0, 0, 0);
       if ((cfile = fopen("nodes.c", "w")) == NULL)
-	    error("Can't create nodes.c");
+	    error("Can't create nodes.c", 0, 0, 0, 0, 0, 0);
       fputs(writer, hfile);
       for (i = 0 ; i < ntypes ; i++)
 	    fprintf(hfile, "#define %s %d\n", nodename[i], i);
@@ -211,9 +218,7 @@ output() {
 
 
 
-outsizes(cfile)
-      FILE *cfile;
-      {
+void outsizes(FILE *cfile) {
       int i;
 
       fprintf(cfile, "static const short nodesize[%d] = {\n", ntypes);
@@ -224,9 +229,7 @@ outsizes(cfile)
 }
 
 
-outfunc(cfile, calcsize)
-      FILE *cfile;
-      {
+void outfunc(FILE *cfile, int calcsize) {
       struct str *sp;
       struct field *fp;
       int i;
@@ -303,9 +306,7 @@ outfunc(cfile, calcsize)
 }
 
 
-indent(amount, fp)
-      FILE *fp;
-      {
+void indent(int amount, FILE *fp) {
       while (amount >= 8) {
 	    putc('\t', fp);
 	    amount -= 8;
@@ -316,10 +317,7 @@ indent(amount, fp)
 }
 
 
-int
-nextfield(buf)
-      char *buf;
-      {
+int nextfield(char *buf) {
       register char *p, *q;
 
       p = linep;
@@ -334,14 +332,13 @@ nextfield(buf)
 }
 
 
-skipbl() {
+void skipbl() {
       while (*linep == ' ' || *linep == '\t')
 	    linep++;
 }
 
 
-int
-readline() {
+int readline() {
       register char *p;
 
       if (fgets(line, 1024, infp) == NULL)
@@ -353,15 +350,13 @@ readline() {
       linep = line;
       linno++;
       if (p - line > BUFLEN)
-	    error("Line too long");
+	    error("Line too long", 0, 0, 0, 0, 0, 0);
       return 1;
 }
 
 
 
-error(msg, a1, a2, a3, a4, a5, a6)
-      char *msg;
-      {
+void error(char *msg, int a1, int a2, int a3, int a4, int a5, int a6) {
       fprintf(stderr, "line %d: ", linno);
       fprintf(stderr, msg, a1, a2, a3, a4, a5, a6);
       putc('\n', stderr);
@@ -370,15 +365,11 @@ error(msg, a1, a2, a3, a4, a5, a6)
 
 
 
-char *
-savestr(s)
-      char *s;
-      {
+char *savestr(char *s) {
       register char *p;
-      char *malloc();
 
       if ((p = malloc(strlen(s) + 1)) == NULL)
-	    error("Out of space");
+	    error("Out of space", 0, 0, 0, 0, 0, 0);
       strcpy(p, s);
       return p;
 }

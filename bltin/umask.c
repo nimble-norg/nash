@@ -5,9 +5,10 @@
  */
 
 #include <stdio.h>
+#include <stdlib.h>
+#include <sys/stat.h>
 
-
-main(argc, argv)  char **argv; {
+int main(int argc, char **argv) {
       int mask;
 
       if (argc > 1) {

@@ -99,11 +99,7 @@ STATIC char *expudir();
  * Expand shell variables and backquotes inside a here document.
  */
 
-void
-expandhere(arg, fd)
-      union node *arg;	/* the document */
-      int fd;			/* where to write the expanded version */
-      {
+void expandhere(union node *arg, int fd) {
       herefd = fd;
       expandarg(arg, (struct arglist *)NULL, 0);
       xwrite(fd, stackblock(), expdest - stackblock());
@@ -117,11 +113,7 @@ expandhere(arg, fd)
  * here document expansion.
  */
 
-void
-expandarg(arg, arglist, full)
-      union node *arg;
-      struct arglist *arglist;
-      {
+void expandarg(union node *arg, struct arglist *arglist, full) {
       struct strlist *sp;
       char *p;
 
@@ -285,10 +277,7 @@ expbackq(cmd, quoted, full)
  * input string.
  */
 
-STATIC char *
-evalvar(p, full)
-      char *p;
-      {
+STATIC char *evalvar(char *p, full) {
       int subtype;
       int flags;
       char *var;
