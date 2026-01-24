@@ -21,12 +21,12 @@ GENERATEDFILES=syntax.h syntax.c signames.h signames.c nodes.c nodes.c\
 
 #CC=gcc
 DEBUG=-g
-CFLAGS=$(DEBUG)
+CFLAGS=$(DEBUG) -g -O2 -Wall -fcommon
 LDFLAGS=
 BLTIN=bltin
 
 
-all: make_bltin ash
+all: make_bltin nash
 
 make_bltin:
 	cd bltin; make 'CC=$(CC)' 'DEBUG=$(DEBUG)'
@@ -34,14 +34,14 @@ make_bltin:
 
 clean:
 	rm -f $(FILES)
-	rm -f $(GENERATEDFILES) mksyntax mksignames mknodes mkinit
+	rm -f $(GENERATEDFILES) mksyntax mksignames mknodes mkinit ash nash
 	rm -f bltin/bltinlib.a bltin/*.o bltin/operators.h bltin/operators.c
 
 clobber: clean
-	rm -f ash bltin/catf bltin/expr bltin/test 'bltin/[' bltin/echo bltin/line bltin/nlecho bltin/true bltin/: bltin/umask
+	rm -f ash bltin/catf bltin/expr bltin/test 'bltin/[' bltin/echo bltin/line bltin/nlecho bltin/true bltin/: bltin/umask nash
 
 
-ash:$P $(FILES) $(BLTIN)/bltinlib.a $(MALLOC)
+nash:$P $(FILES) $(BLTIN)/bltinlib.a $(MALLOC)
 	$(CC) -o temp $(LDFLAGS) $(DEBUG) $(FILES) $(BLTIN)/bltinlib.a $(MALLOC)
 #	ld -o temp crt0.o $(FILES) $(BLTIN)/bltinlib.a $(MALLOC) -lc
 	mv -f temp $@
@@ -119,3 +119,5 @@ trap.o: shell.h main.h nodes.h eval.h jobs.h options.h syntax.h signames.h\
 	output.h memalloc.h error.h trap.h
 var.o: shell.h output.h expand.h nodes.h eval.h exec.h syntax.h mail.h\
 	options.h var.h memalloc.h error.h mystring.h
+love:
+	@echo "Not war."
