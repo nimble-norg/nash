@@ -4,10 +4,13 @@
  * by the Ash General Public License.  See the file named LICENSE.
  */
 
-
+#include <stdlib.h>
+#include <errno.h>
 #include <signal.h>
 #include <unistd.h>
 #include <fcntl.h>
+#include <string.h>
+
 #include "shell.h"
 #include "main.h"
 #include "mail.h"
@@ -33,29 +36,15 @@
 const char copyright[] = "@(#)Copyright 1989 by Kenneth Almquist";
 int rootpid;
 int rootshell;
-STATIC union node *curcmd;
-STATIC union node *prevcmd;
-extern int errno;
+static union node *curcmd;
+static union node *prevcmd;
+
 #if PROFILE
 short profile_buf[16384];
 extern int etext();
 #endif
 
-#ifdef __STDC__
-STATIC void read_profile(char *);
-char *getenv(char *);
-#else
-STATIC void read_profile();
-char *getenv();
-#endif
-
-/*
- * Main routine.  We initialize things, parse the arguments, execute
- * profiles if we're a login shell, and then call cmdloop to execute
- * commands.  The setjmp call sets up the location to jump to when an
- * exception occurs.  When an exception occurs the variable "state"
- * is used to figure out how far we had gotten.
- */
+static void read_profile(const char *);
 
 int main(int argc, char **argv) {
       struct jmploc jmploc;
@@ -68,22 +57,17 @@ int main(int argc, char **argv) {
 #endif
       state = 0;
       if (setjmp(jmploc.loc)) {
-	    /*
-	     * When a shell procedure is executed, we raise the
-	     * exception EXSHELLPROC to clean up before executing
-	     * the shell procedure.
-	     */
 	    if (exception == EXSHELLPROC) {
 		  rootpid = getpid();
 		  rootshell = 1;
 		  minusc = NULL;
 		  state = 3;
-	    } else if (state == 0 || iflag == 0 || ! rootshell)
+	    } else if (state == 0 || iflag == 0 || !rootshell) {
 		  exitshell(2);
+	    }
 	    reset();
 #if ATTY
-	    if (exception == EXINT
-	     && (! attyset() || equal(termval(), "emacs"))) {
+	    if (exception == EXINT && (!attyset() || equal(termval(), "emacs"))) {
 #else
 	    if (exception == EXINT) {
 #endif
@@ -91,7 +75,8 @@ int main(int argc, char **argv) {
 		  flushout(&errout);
 	    }
 	    popstackmark(&smark);
-	    FORCEINTON;				/* enable interrupts */
+	    FORCEINTON;
+	    
 	    if (state == 1)
 		  goto state1;
 	    else if (state == 2)
@@ -99,16 +84,21 @@ int main(int argc, char **argv) {
 	    else
 		  goto state3;
       }
+      
       handler = &jmploc;
+
 #ifdef DEBUG
       opentrace();
-      trputs("Shell args:  ");  trargs(argv);
+      trputs("Shell args:  ");  
+      trargs(argv);
 #endif
+
       rootpid = getpid();
       rootshell = 1;
       init();
       setstackmark(&smark);
       procargs(argc, argv);
+      
       if (argv[0] && argv[0][0] == '-') {
 	    state = 1;
 	    read_profile("/etc/profile");
@@ -132,13 +122,8 @@ state3:
       monitor(0);
 #endif
       exitshell(exitstatus);
+      return 0;
 }
-
-
-/*
- * Read and execute commands.  "Top" is nonzero for the top level command
- * loop; it turns on prompting if the shell is interactive.
- */
 
 void cmdloop(int top) {
       union node *n;
@@ -175,23 +160,13 @@ void cmdloop(int top) {
 			INTON;
 		  }
 		  evaltree(n, 0);
-#ifdef notdef
-		  if (exitstatus)				      /*DEBUG*/
-			outfmt(&errout, "Exit status 0x%X\n", exitstatus);
-#endif
 	    }
 	    popstackmark(&smark);
       }
-      popstackmark(&smark);		/* unnecessary */
+      popstackmark(&smark);
 }
 
-
-
-/*
- * Read /etc/profile or .profile.  Return on error.
- */
-
-void read_profile(char *name) {
+static void read_profile(const char *name) {
       int fd;
 
       INTOFF;
@@ -204,13 +179,7 @@ void read_profile(char *name) {
       popfile();
 }
 
-
-
-/*
- * Read a file containing shell functions.
- */
-
-void readcmdfile(char *name) {
+void readcmdfile(const char *name) {
       int fd;
 
       INTOFF;
@@ -223,16 +192,9 @@ void readcmdfile(char *name) {
       popfile();
 }
 
-
-
-/*
- * Take commands from a file.  To be compatable we should do a path
- * search for the file, but a path search doesn't make any sense.
- */
-
 int dotcmd(int argc, char **argv) {
       exitstatus = 0;
-      if (argc >= 2) {		/* That's what SVR2 does */
+      if (argc >= 2) {
 	    setinputfile(argv[1], 1);
 	    commandname = argv[1];
 	    cmdloop(0);
@@ -241,13 +203,12 @@ int dotcmd(int argc, char **argv) {
       return exitstatus;
 }
 
-
 int exitcmd(int argc, char **argv) {
       if (argc > 1)
 	    exitstatus = number(argv[1]);
       exitshell(exitstatus);
+      return exitstatus;
 }
-
 
 int lccmd(int argc, char **argv) {
       if (argc > 1) {
@@ -263,16 +224,3 @@ int lccmd(int argc, char **argv) {
 	    return exitstatus;
       }
 }
-
-
-
-#ifdef notdef
-/*
- * Should never be called.
- */
-
-void
-exit(exitstatus) {
-      _exit(exitstatus);
-}
-#endif
