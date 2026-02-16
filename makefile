@@ -21,8 +21,8 @@ GENERATEDFILES=syntax.h syntax.c signames.h signames.c nodes.c nodes.c\
 
 #CC=gcc
 DEBUG=-g
-CFLAGS=$(DEBUG) -g -O2 -Wall -fcommon
-LDFLAGS=
+CFLAGS=$(DEBUG) -g -O2 -Wall -fcommon -static
+LDFLAGS=-static
 BLTIN=bltin
 
 

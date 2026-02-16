@@ -19,6 +19,8 @@
 #include <stdlib.h>
 #include "redir.h"
 #include <unistd.h>
+#include <termios.h>
+#include <ctype.h>
 
 #define EOF_NLEFT -99		/* value of parsenleft when EOF pushed back */
 
@@ -54,6 +56,143 @@ STATIC void pushfile(void);
 STATIC void pushfile();
 #endif
 
+
+#define HIST_MAX 50
+#define HIST_LEN 256
+static char hist[HIST_MAX][HIST_LEN];
+static int hist_count = 0;
+static int hist_pos = 0;
+
+static void enable_raw_mode(struct termios *orig) {
+      struct termios raw;
+      tcgetattr(STDIN_FILENO, orig);
+      raw = *orig;
+      raw.c_lflag &= ~(ECHO | ICANON | IEXTEN | ISIG);
+      raw.c_iflag &= ~(BRKINT | ICRNL | INPCK | ISTRIP | IXON);
+      raw.c_cflag |= (CS8);
+      raw.c_oflag &= ~(OPOST);
+      raw.c_cc[VMIN] = 1;
+      raw.c_cc[VTIME] = 0;
+      tcsetattr(STDIN_FILENO, TCSAFLUSH, &raw);
+}
+
+static void disable_raw_mode(struct termios *orig) {
+      tcsetattr(STDIN_FILENO, TCSAFLUSH, orig);
+}
+
+static void hist_add(const char *line) {
+      if (hist_count < HIST_MAX) {
+            strncpy(hist[hist_count], line, HIST_LEN - 1);
+            hist[hist_count][HIST_LEN - 1] = '\0';
+            hist_count++;
+      } else {
+            int i;
+            for (i = 1; i < HIST_MAX; i++) {
+                  strcpy(hist[i - 1], hist[i]);
+            }
+            strncpy(hist[HIST_MAX - 1], line, HIST_LEN - 1);
+            hist[HIST_MAX - 1][HIST_LEN - 1] = '\0';
+      }
+      hist_pos = hist_count;
+}
+
+static int input_readline(char *buf, int maxlen) {
+      struct termios orig_termios;
+      int pos = 0;
+      int len = 0;
+      char ch;
+      int i;
+
+      enable_raw_mode(&orig_termios);
+      hist_pos = hist_count;
+
+      memset(buf, 0, maxlen);
+
+      while (1) {
+            if (read(STDIN_FILENO, &ch, 1) != 1) break;
+
+            if (ch == '\r' || ch == '\n') {
+                  if (len > 0) hist_add(buf);
+                  write(STDOUT_FILENO, "\r\n", 2);
+                  buf[len] = '\n';
+                  len++;
+                  break;
+            } else if (ch == 127 || ch == '\b') {
+                  if (pos > 0) {
+                        if (pos < len) {
+                             memmove(buf + pos - 1, buf + pos, len - pos);
+                        }
+                        pos--;
+                        len--;
+                        buf[len] = '\0';
+                        write(STDOUT_FILENO, "\b", 1);
+                        write(STDOUT_FILENO, buf + pos, len - pos);
+                        write(STDOUT_FILENO, " ", 1);
+                        for (i = 0; i < len - pos + 1; i++) write(STDOUT_FILENO, "\b", 1);
+                  }
+            } else if (ch == '\t') {
+                  /* Minimal autocomplete stub */
+            } else if (ch == '\033') {
+                  char seq[3];
+                  if (read(STDIN_FILENO, &seq[0], 1) == 1 && read(STDIN_FILENO, &seq[1], 1) == 1) {
+                        if (seq[0] == '[') {
+                              if (seq[1] == 'A') { /* Up */
+                                    if (hist_pos > 0) {
+                                          hist_pos--;
+                                          while (pos > 0) {
+                                                write(STDOUT_FILENO, "\b \b", 3);
+                                                pos--;
+                                          }
+                                          strcpy(buf, hist[hist_pos]);
+                                          len = strlen(buf);
+                                          pos = len;
+                                          write(STDOUT_FILENO, buf, len);
+                                    }
+                              } else if (seq[1] == 'B') { /* Down */
+                                    if (hist_pos < hist_count) {
+                                          hist_pos++;
+                                          while (pos > 0) {
+                                                write(STDOUT_FILENO, "\b \b", 3);
+                                                pos--;
+                                          }
+                                          if (hist_pos < hist_count) {
+                                                strcpy(buf, hist[hist_pos]);
+                                                len = strlen(buf);
+                                          } else {
+                                                buf[0] = '\0';
+                                                len = 0;
+                                          }
+                                          pos = len;
+                                          write(STDOUT_FILENO, buf, len);
+                                    }
+                              } else if (seq[1] == 'C') { /* Right */
+                                    if (pos < len) {
+                                          write(STDOUT_FILENO, &buf[pos], 1);
+                                          pos++;
+                                    }
+                              } else if (seq[1] == 'D') { /* Left */
+                                    if (pos > 0) {
+                                          write(STDOUT_FILENO, "\b", 1);
+                                          pos--;
+                                    }
+                              }
+                        }
+                  }
+            } else if (!iscntrl(ch) && len < maxlen - 2) {
+                  if (pos < len) {
+                        memmove(buf + pos + 1, buf + pos, len - pos);
+                  }
+                  buf[pos] = ch;
+                  write(STDOUT_FILENO, &buf[pos], len - pos + 1);
+                  for (i = 0; i < len - pos; i++) write(STDOUT_FILENO, "\b", 1);
+                  len++;
+                  pos++;
+            }
+      }
+
+      disable_raw_mode(&orig_termios);
+      return len;
+}
 
 
 #ifdef mkinit
@@ -118,9 +257,9 @@ int pgetc() {
  * Refill the input buffer and return the next input character:
  *
  * 1) If a string was pushed back on the input, switch back to the regular
- *    buffer.
+ * buffer.
  * 2) If an EOF was pushed back (parsenleft == EOF_NLEFT) or we are reading
- *    from a string so we can't refill the buffer, return EOF.
+ * from a string so we can't refill the buffer, return EOF.
  * 3) Call read to read in the characters.
  * 4) Delete all nul characters from the buffer.
  */
@@ -142,7 +281,13 @@ int preadbuffer() {
       flushout(&errout);
 retry:
       p = parsenextc = parsefile->buf;
-      i = read(parsefile->fd, p, BUFSIZ);
+      
+      if (parsefile->fd == 0 && isatty(0)) {
+            i = input_readline(p, BUFSIZ);
+      } else {
+            i = read(parsefile->fd, p, BUFSIZ);
+      }
+
       if (i <= 0) {
 	    if (i < 0) {
 		  if (errno == EINTR)

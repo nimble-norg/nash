@@ -53,10 +53,10 @@ const struct varinit varinit[] = {
       {&vifs,	VSTRFIXED|VTEXTFIXED,		"IFS= \t\n"},
       {&vmail,	VSTRFIXED|VTEXTFIXED|VUNSET,	"MAIL="},
       {&vmpath,	VSTRFIXED|VTEXTFIXED|VUNSET,	"MAILPATH="},
-      {&vpath,	VSTRFIXED|VTEXTFIXED,		"PATH=/usr/bin"},
+      {&vpath,	VSTRFIXED|VTEXTFIXED,		"PATH=/usr/local/bin:/usr/local/sbin:/usr/bin:/usr/sbin:/bin:/sbin"},
       {&vps1,	VSTRFIXED|VTEXTFIXED,		"PS1=@ "},
       {&vps2,	VSTRFIXED|VTEXTFIXED,		"PS2=> "},
-      {&vvers,	VSTRFIXED|VTEXTFIXED,		"SHELLVERS=nash 0.3"},
+      {&vvers,	VSTRFIXED|VTEXTFIXED,		"SHELLVERS=nash 0.5"},
 #if ATTY
       {&vterm,	VSTRFIXED|VTEXTFIXED|VUNSET,	"TERM="},
 #endif

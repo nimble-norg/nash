@@ -1,8 +1,7 @@
 # NimbleOS Almquist Shell v0.3
 
 This project is a fork of the original Almquist Shell, focused on updating the codebase for compatibility 
-with modern compilers and operating systems. The primary goal is to resolve legacy syntax issues while 
-strictly preserving the original behavior and core features of the Almquist Shell.
+with modern compilers and operating systems.
 
 # Licensing and Copyright 
 
