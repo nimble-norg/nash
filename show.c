@@ -5,162 +5,21 @@
  */
 
 #include <stdio.h>
+#include <stdlib.h>
+#include <stdarg.h>
+#include <string.h>
+#include <fcntl.h>
+#include <unistd.h>
 #include "shell.h"
 #include "parser.h"
 #include "nodes.h"
 #include "mystring.h"
 
-
-#ifdef notdef
-static shtree(), shcmd(), sharg(), indent();
-
-
-void showtree(union node *n) {
-      trputs("showtree called\n");
-      shtree(n, 1, NULL, stdout);
-}
-
-
-static shtree(union node *n, int ind, char *pfx, FILE *fp) {
-      struct nodelist *lp;
-      char *s;
-
-      indent(ind, pfx, fp);
-      switch(n->type) {
-      case NSEMI:
-	    s = "; ";
-	    goto binop;
-      case NAND:
-	    s = " && ";
-	    goto binop;
-      case NOR:
-	    s = " || ";
-binop:
-	    shtree(n->nbinary.ch1, ind, NULL, fp);
-	    if (ind < 0)
-		  fputs(s, fp);
-	    shtree(n->nbinary.ch2, ind, NULL, fp);
-	    break;
-      case NCMD:
-	    shcmd(n, fp);
-	    if (ind >= 0)
-		  putc('\n', fp);
-	    break;
-      case NPIPE:
-	    for (lp = n->npipe.cmdlist ; lp ; lp = lp->next) {
-		  shcmd(lp->n, fp);
-		  if (lp->next)
-			fputs(" | ", fp);
-	    }
-	    if (n->npipe.backgnd)
-		  fputs(" &", fp);
-	    if (ind >= 0)
-		  putc('\n', fp);
-	    break;
-      default:
-	    fprintf(fp, "<node type %d>", n->type);
-	    if (ind >= 0)
-		  putc('\n', fp);
-	    break;
-      }
-}
-
-
-
-static shcmd(union node *cmd, FILE *fp) {
-      union node *np;
-      int first;
-      char *s;
-      int dftfd;
-
-      first = 1;
-      for (np = cmd->ncmd.args ; np ; np = np->narg.next) {
-	    if (! first)
-		  putchar(' ');
-	    sharg(np, fp);
-	    first = 0;
-      }
-      for (np = cmd->ncmd.redirect ; np ; np = np->nfile.next) {
-	    if (! first)
-		  putchar(' ');
-	    switch (np->nfile.type) {
-		  case NTO:	s = ">";  dftfd = 1; break;
-		  case NAPPEND:	s = ">>"; dftfd = 1; break;
-		  case NTOFD:	s = ">&"; dftfd = 1; break;
-		  case NFROM:	s = "<";  dftfd = 0; break;
-		  case NFROMFD:	s = "<&"; dftfd = 0; break;
-	    }
-	    if (np->nfile.fd != dftfd)
-		  fprintf(fp, "%d", np->nfile.fd);
-	    fputs(s, fp);
-	    if (np->nfile.type == NTOFD || np->nfile.type == NFROMFD) {
-		  fprintf(fp, "%d", np->nfile.dupfd);
-	    } else {
-		  sharg(np->nfile.fname, fp);
-	    }
-	    first = 0;
-      }
-}
-
-
-
-static sharg(union node *arg, FILE *fp) {
-      char *p;
-      struct nodelist *bqlist;
-
-      if (arg->type != NARG) {
-	    printf("<node type %d>\n", arg->type);
-	    fflush(stdout);
-	    abort();
-      }
-      bqlist = arg->narg.backquote;
-      for (p = arg->narg.text ; *p ; p++) {
-	    switch (*p) {
-	    case CTLESC:
-		  putc(*++p, fp);
-		  break;
-	    case CTLVAR:
-	    case CTLVAR|CTLQUOTE:
-		  putc('$', fp);
-		  break;
-	    case CTLBACKQ:
-	    case CTLBACKQ|CTLQUOTE:
-		  putc('`', fp);
-		  shtree(bqlist->n, -1, NULL, fp);
-		  putc('`', fp);
-		  break;
-	    default:
-		  putc(*p, fp);
-		  break;
-	    }
-      }
-}
-
-
-static indent(int amount, char *pfx, FILE *fp)
-      char *pfx;
-      FILE *fp;
-      {
-      int i;
-
-      for (i = 0 ; i < amount ; i++) {
-	    if (pfx && i == amount - 1)
-		  fputs(pfx, fp);
-	    putc('\t', fp);
-      }
-}
-#endif
-
-
-
 /*
  * Debugging stuff.
  */
 
-
 FILE *tracefile;
-
-
 
 void trputc(int c) {
 #ifdef DEBUG
@@ -172,19 +31,20 @@ void trputc(int c) {
 #endif
 }
 
-
-void trace(char *fmt, int a1, int a2, int a3, int a4, int a5, int a6, int a7, int a8) {
+void trace(const char *fmt, ...) {
 #ifdef DEBUG
+      va_list ap;
       if (tracefile == NULL)
 	    return;
-      fprintf(tracefile, fmt, a1, a2, a3, a4, a5, a6, a7, a8);
+      va_start(ap, fmt);
+      vfprintf(tracefile, fmt, ap);
+      va_end(ap);
       if (strchr(fmt, '\n'))
 	    fflush(tracefile);
 #endif
 }
 
-
-void trputs(char *s) {
+void trputs(const char *s) {
 #ifdef DEBUG
       if (tracefile == NULL)
 	    return;
@@ -194,9 +54,8 @@ void trputs(char *s) {
 #endif
 }
 
-
-void trstring(char *s) {
-      register char *p;
+void trstring(const char *s) {
+      const char *p;
       char c;
 
 #ifdef DEBUG
@@ -208,7 +67,7 @@ void trstring(char *s) {
 	    case '\n':  c = 'n';  goto backslash;
 	    case '\t':  c = 't';  goto backslash;
 	    case '\r':  c = 'r';  goto backslash;
-	    case '"':  c = '"';  goto backslash;
+	    case '"':   c = '"';  goto backslash;
 	    case '\\':  c = '\\';  goto backslash;
 	    case CTLESC:  c = 'e';  goto backslash;
 	    case CTLVAR:  c = 'v';  goto backslash;
@@ -223,8 +82,8 @@ backslash:	  putc('\\', tracefile);
 			putc(*p, tracefile);
 		  else {
 			putc('\\', tracefile);
-			putc(*p >> 6 & 03, tracefile);
-			putc(*p >> 3 & 07, tracefile);
+			putc((*p >> 6) & 03, tracefile);
+			putc((*p >> 3) & 07, tracefile);
 			putc(*p & 07, tracefile);
 		  }
 		  break;
@@ -233,7 +92,6 @@ backslash:	  putc('\\', tracefile);
       putc('"', tracefile);
 #endif
 }
-
 
 void trargs(char **ap) {
 #ifdef DEBUG
@@ -250,11 +108,9 @@ void trargs(char **ap) {
 #endif
 }
 
-
-void opentrace() {
+void opentrace(void) {
       char s[100];
-      char *p;
-      char *getenv();
+      const char *p;
       int flags;
 
 #ifdef DEBUG

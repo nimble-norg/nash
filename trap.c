@@ -6,6 +6,8 @@
  * by the Ash General Public License.  See the file named LICENSE.
  */
 
+volatile int pendingsig;
+
 #include "shell.h"
 #include "main.h"
 #include "nodes.h"	/* for other headers */

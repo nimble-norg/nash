@@ -19,7 +19,9 @@
 #include <sys/stat.h>
 #include "myerrno.h"
 #include <unistd.h>
+#include <string.h>
 #include "redir.h"
+#include "exec.h"
 
 #ifdef __STDC__
 STATIC int docd(char *, int);
@@ -47,7 +49,6 @@ int cdcmd(int argc, char **argv) {
       char *path;
       char *p;
       struct stat statb;
-      char *padvance();
 
       nextopt(nullstr);
       if ((dest = *argptr) == NULL && (dest = bltinlookup("HOME", 1)) == NULL)
@@ -56,7 +57,7 @@ int cdcmd(int argc, char **argv) {
 	    path = nullstr;
       while ((p = padvance(&path, dest)) != NULL) {
 	    if (stat(p, &statb) >= 0
-	     && (statb.st_mode & S_IFMT) == S_IFDIR
+	     && S_ISDIR(statb.st_mode)
 	     && docd(p, strcmp(p, dest)) >= 0)
 		  return 0;
       }
@@ -94,11 +95,8 @@ STATIC int docd(char *dest, int print) {
 
 #else
 
-
-
 STATIC int
-docd(dest, print)
-      char *dest;
+docd(char *dest, int print)
       {
       register char *p;
       register char *q;
@@ -123,7 +121,7 @@ top:
       }
       first = 1;
       while ((q = getcomponent()) != NULL) {
-	    if (q[0] == '\0' || q[0] == '.' && q[1] == '\0')
+	    if (q[0] == '\0' || (q[0] == '.' && q[1] == '\0'))
 		  continue;
 	    if (! first)
 		  STPUTC('/', p);
@@ -131,12 +129,12 @@ top:
 	    component = q;
 	    while (*q)
 		  STPUTC(*q++, p);
-	    if (equal(component, ".."))
+	    if (strcmp(component, "..") == 0)
 		  continue;
 	    STACKSTRNUL(p);
 	    if (lstat(stackblock(), &statb) < 0)
 		  error("lstat %s failed", stackblock());
-	    if ((statb.st_mode & S_IFMT) != S_IFLNK)
+	    if (!S_ISLNK(statb.st_mode))
 		  continue;
 
 	    /* Hit a symbolic link.  We have to start all over again. */
@@ -145,14 +143,14 @@ top:
 	    symlink = grabstackstr(p);
 	    i = (int)statb.st_size + 2;		/* 2 for '/' and '\0' */
 	    if (cdcomppath != NULL)
-		  i += strlen(cdcomppath);
+		  i += (int)strlen(cdcomppath);
 	    p = stalloc(i);
-	    if (readlink(symlink, p, (int)statb.st_size) < 0) {
+	    if (readlink(symlink, p, (size_t)statb.st_size) < 0) {
 		  error("readlink %s failed", stackblock());
 	    }
 	    if (cdcomppath != NULL) {
 		  p[(int)statb.st_size] = '/';
-		  scopy(cdcomppath, p + (int)statb.st_size + 1);
+		  strcpy(p + (int)statb.st_size + 1, cdcomppath);
 	    } else {
 		  p[(int)statb.st_size] = '\0';
 	    }
@@ -165,7 +163,7 @@ top:
 		  }
 		  *r = '\0';
 		  dest = stalloc(strlen(symlink) + strlen(p) + 1);
-		  scopy(symlink, dest);
+		  strcpy(dest, symlink);
 		  strcat(dest, p);
 	    } else {
 		  dest = p;
@@ -195,7 +193,7 @@ top:
  */
 
 STATIC char *
-getcomponent() {
+getcomponent(void) {
       register char *p;
       char *start;
 
@@ -221,18 +219,15 @@ getcomponent() {
  * that the current directory has changed.
  */
 
-void hashcd();
-
 STATIC void
-updatepwd(dir)
-      char *dir;
+updatepwd(char *dir)
       {
       char *new;
       char *p;
 
       hashcd();				/* update command hash table */
       cdcomppath = stalloc(strlen(dir) + 1);
-      scopy(dir, cdcomppath);
+      strcpy(cdcomppath, dir);
       STARTSTACKSTR(new);
       if (*dir != '/') {
 	    if (curdir == NULL)
@@ -244,9 +239,9 @@ updatepwd(dir)
 		  STUNPUTC(new);
       }
       while ((p = getcomponent()) != NULL) {
-	    if (equal(p, "..")) {
+	    if (strcmp(p, "..") == 0) {
 		  while (new > stackblock() && (STUNPUTC(new), *new) != '/');
-	    } else if (*p != '\0' && ! equal(p, ".")) {
+	    } else if (*p != '\0' && strcmp(p, ".") != 0) {
 		  STPUTC('/', new);
 		  while (*p)
 			STPUTC(*p++, new);
@@ -280,7 +275,7 @@ int pwdcmd(int argc, char **argv) {
 
 #define MAXPWD 256
 
-STATIC void getpwd() {
+STATIC void getpwd(void) {
       char buf[MAXPWD];
       char *p;
       int i;
@@ -307,8 +302,8 @@ STATIC void getpwd() {
       close(pip[1]);
       pip[1] = -1;
       p = buf;
-      while ((i = read(pip[0], p, buf + MAXPWD - p)) > 0
-	  || i == -1 && errno == EINTR) {
+      while ((i = (int)read(pip[0], p, (size_t)(buf + MAXPWD - p))) > 0
+	  || (i == -1 && errno == EINTR)) {
 	    if (i > 0)
 		  p += i;
       }

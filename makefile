@@ -22,7 +22,7 @@ GENERATEDFILES=syntax.h syntax.c signames.h signames.c nodes.c nodes.c\
 #CC=gcc
 STRIP=strip
 DEBUG=-g
-CFLAGS=$(DEBUG) -g -O2 -Wall -fcommon
+CFLAGS=$(DEBUG) -g -O2 -Wall -fcommon -std=c99
 #LDFLAGS=
 BLTIN=bltin
 

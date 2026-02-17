@@ -35,14 +35,7 @@ extern char *optarg;		/* set by nextopt */
 extern char *optptr;		/* used by nextopt */
 
 
-#ifdef __STDC__
-void procargs(int, char **);
-void setparam(char **);
-void freeparam(struct shparam *);
-int nextopt(char *);
-#else
-void procargs();
-void setparam();
-void freeparam();
-int nextopt();
-#endif
+void procargs(int argc, char **argv);
+void setparam(char **argv);
+void freeparam(struct shparam *param);
+int nextopt(char *optstring);

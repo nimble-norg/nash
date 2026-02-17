@@ -6,23 +6,28 @@
  * This file implements the input routines used by the parser.
  */
 
+#define _DEFAULT_SOURCE 
+#define _GNU_SOURCE
 #include <stdio.h>	/* defines BUFSIZ */
+#include <fcntl.h>
+#include <string.h>
+#include <stdlib.h>
+#include <unistd.h>
+#include <termios.h>
+#include <ctype.h>
+#include <dirent.h>
+#include <errno.h>
+#include <sys/stat.h>
+#include <sys/types.h>
+
 #include "shell.h"
 #include "syntax.h"
 #include "input.h"
 #include "output.h"
 #include "memalloc.h"
 #include "error.h"
-#include <fcntl.h>
 #include "myerrno.h"
-#include <string.h>
-#include <stdlib.h>
 #include "redir.h"
-#include <unistd.h>
-#include <termios.h>
-#include <ctype.h>
-#include <dirent.h>
-#include <sys/stat.h>
 #include "var.h"
 
 #define EOF_NLEFT -99		/* value of parsenleft when EOF pushed back */
@@ -53,12 +58,14 @@ struct parsefile *parsefile = &basepf;	/* current input file */
 char *pushedstring;		/* copy of parsenextc when text pushed back */
 int pushednleft;		/* copy of parsenleft when text pushed back */
 
-#ifdef __STDC__
-STATIC void pushfile(void);
-#else
-STATIC void pushfile();
-#endif
-
+/* Protótipos de funções estáticas */
+static void pushfile(void);
+static char *get_ps1(void);
+static void enable_raw_mode(struct termios *orig);
+static void disable_raw_mode(struct termios *orig);
+static void hist_add(const char *line);
+static void tab_completion(char *buf, int *pos, int *len, int maxlen);
+static int input_readline(char *buf, int maxlen);
 
 #define HIST_MAX 50
 #define HIST_LEN 256
@@ -98,8 +105,7 @@ static void hist_add(const char *line) {
             hist[hist_count][HIST_LEN - 1] = '\0';
             hist_count++;
       } else {
-            int i;
-            for (i = 1; i < HIST_MAX; i++) {
+            for (int i = 1; i < HIST_MAX; i++) {
                   strcpy(hist[i - 1], hist[i]);
             }
             strncpy(hist[HIST_MAX - 1], line, HIST_LEN - 1);
@@ -163,7 +169,7 @@ static void tab_completion(char *buf, int *pos, int *len, int maxlen) {
             DIR *d = opendir(dir_to_open);
             if (d) {
                   struct dirent *de;
-                  int f_pref_len = strlen(file_prefix);
+                  int f_pref_len = (int)strlen(file_prefix);
                   while ((de = readdir(d)) != NULL && match_count < 128) {
                         if (strncmp(de->d_name, file_prefix, f_pref_len) == 0) {
                               if (strcmp(de->d_name, ".") == 0 || strcmp(de->d_name, "..") == 0) continue;
@@ -176,7 +182,7 @@ static void tab_completion(char *buf, int *pos, int *len, int maxlen) {
 
       if (match_count == 1) {
             char *to_add = matches[0] + strlen(file_prefix);
-            int add_len = strlen(to_add);
+            int add_len = (int)strlen(to_add);
             if (*len + add_len + 1 < maxlen) {
                   memmove(buf + *pos + add_len, buf + *pos, *len - *pos);
                   memcpy(buf + *pos, to_add, add_len);
@@ -220,7 +226,6 @@ static int input_readline(char *buf, int maxlen) {
       int pos = 0;
       int len = 0;
       char ch;
-      int i;
 
       enable_raw_mode(&orig_termios);
       hist_pos = hist_count;
@@ -247,7 +252,7 @@ static int input_readline(char *buf, int maxlen) {
                         write(STDOUT_FILENO, "\b", 1);
                         write(STDOUT_FILENO, buf + pos, len - pos);
                         write(STDOUT_FILENO, " ", 1);
-                        for (i = 0; i < len - pos + 1; i++) write(STDOUT_FILENO, "\b", 1);
+                        for (int i = 0; i < len - pos + 1; i++) write(STDOUT_FILENO, "\b", 1);
                   }
             } else if (ch == '\t') {
                   tab_completion(buf, &pos, &len, maxlen);
@@ -263,7 +268,7 @@ static int input_readline(char *buf, int maxlen) {
                                                 pos--;
                                           }
                                           strcpy(buf, hist[hist_pos]);
-                                          len = strlen(buf);
+                                          len = (int)strlen(buf);
                                           pos = len;
                                           write(STDOUT_FILENO, buf, len);
                                     }
@@ -276,7 +281,7 @@ static int input_readline(char *buf, int maxlen) {
                                           }
                                           if (hist_pos < hist_count) {
                                                 strcpy(buf, hist[hist_pos]);
-                                                len = strlen(buf);
+                                                len = (int)strlen(buf);
                                           } else {
                                                 buf[0] = '\0';
                                                 len = 0;
@@ -306,28 +311,29 @@ static int input_readline(char *buf, int maxlen) {
                                     }
                               } else if (seq[1] >= '1' && seq[1] <= '4') {
                                     char tilde;
-                                    read(STDIN_FILENO, &tilde, 1);
-                                    if (seq[1] == '1') { /* Home */
-                                          while (pos > 0) {
-                                                write(STDOUT_FILENO, "\b", 1);
-                                                pos--;
-                                          }
-                                    } else if (seq[1] == '4') { /* End */
-                                          while (pos < len) {
-                                                write(STDOUT_FILENO, &buf[pos], 1);
-                                                pos++;
+                                    if (read(STDIN_FILENO, &tilde, 1) > 0) {
+                                          if (seq[1] == '1') { /* Home */
+                                                while (pos > 0) {
+                                                      write(STDOUT_FILENO, "\b", 1);
+                                                      pos--;
+                                                }
+                                          } else if (seq[1] == '4') { /* End */
+                                                while (pos < len) {
+                                                      write(STDOUT_FILENO, &buf[pos], 1);
+                                                      pos++;
+                                                }
                                           }
                                     }
                               }
                         }
                   }
-            } else if (!iscntrl(ch) && len < maxlen - 2) {
+            } else if (!iscntrl((unsigned char)ch) && len < maxlen - 2) {
                   if (pos < len) {
                         memmove(buf + pos + 1, buf + pos, len - pos);
                   }
                   buf[pos] = ch;
                   write(STDOUT_FILENO, &buf[pos], len - pos + 1);
-                  for (i = 0; i < len - pos; i++) write(STDOUT_FILENO, "\b", 1);
+                  for (int i = 0; i < len - pos; i++) write(STDOUT_FILENO, "\b", 1);
                   len++;
                   pos++;
             }
@@ -376,7 +382,7 @@ char *pfgets(char *line, int len) {
 			return NULL;
 		  break;
 	    }
-	    *p++ = c;
+	    *p++ = (char)c;
 	    if (c == '\n')
 		  break;
       }
@@ -391,7 +397,7 @@ char *pfgets(char *line, int len) {
  * Nul characters in the input are silently discarded.
  */
 
-int pgetc() {
+int pgetc(void) {
       return pgetc_macro();
 }
 
@@ -407,7 +413,7 @@ int pgetc() {
  * 4) Delete all nul characters from the buffer.
  */
 
-int preadbuffer() {
+int preadbuffer(void) {
       register char *p, *q;
       register int i;
 
@@ -416,7 +422,7 @@ int preadbuffer() {
 	    pushedstring = NULL;
 	    parsenleft = pushednleft;
 	    if (--parsenleft >= 0)
-		  return *parsenextc++;
+		  return (unsigned char)*parsenextc++;
       }
       if (parsenleft == EOF_NLEFT || parsefile->buf == NULL)
 	    return PEOF;
@@ -428,7 +434,7 @@ retry:
       if (parsefile->fd == 0 && isatty(0)) {
             i = input_readline(p, BUFSIZ);
       } else {
-            i = read(parsefile->fd, p, BUFSIZ);
+            i = (int)read(parsefile->fd, p, BUFSIZ);
       }
 
       if (i <= 0) {
@@ -454,7 +460,7 @@ retry:
 		  if (flags >= 0 && flags & O_NDELAY) {
 			flags &=~ O_NDELAY;
 			if (fcntl(0, F_SETFL, flags) >= 0) {
-			      out2str("ash: turning off NDELAY mode\n");
+			      out2str("ash: turning off O_NDELAY mode\n");
 			      goto retry;
 			}
 		  }
@@ -470,7 +476,7 @@ retry:
 	    if (*p++ == '\0')
 		  break;
 	    if (--i <= 0)
-		  return *parsenextc++;		/* no nul characters */
+		  return (unsigned char)*parsenextc++;		/* no nul characters */
       }
       q = p - 1;
       while (--i > 0) {
@@ -480,8 +486,8 @@ retry:
       }
       if (q == parsefile->buf)
 	    goto retry;			/* buffer contained nothing but nuls */
-      parsenleft = q - parsefile->buf - 1;
-      return *parsenextc++;
+      parsenleft = (int)(q - parsefile->buf - 1);
+      return (unsigned char)*parsenextc++;
 }
 
 
@@ -490,7 +496,7 @@ retry:
  * PEOF may be pushed back.
  */
 
-void pungetc() {
+void pungetc(void) {
       parsenleft++;
       parsenextc--;
 }
@@ -563,7 +569,7 @@ void setinputstring(char *string, int push) {
       if (push)
 	    pushfile();
       parsenextc = string;
-      parsenleft = strlen(string);
+      parsenleft = (int)strlen(string);
       parsefile->buf = NULL;
       plinno = 1;
       INTON;
@@ -576,7 +582,7 @@ void setinputstring(char *string, int push) {
  * adds a new entry to the stack and popfile restores the previous level.
  */
 
-STATIC void pushfile() {
+static void pushfile(void) {
       struct parsefile *pf;
 
       parsefile->nleft = parsenleft;
@@ -589,7 +595,7 @@ STATIC void pushfile() {
 }
 
 
-void popfile() {
+void popfile(void) {
       struct parsefile *pf = parsefile;
 
       INTOFF;
@@ -610,7 +616,7 @@ void popfile() {
  * Return to top level.
  */
 
-void popallfiles() {
+void popallfiles(void) {
       while (parsefile != &basepf)
 	    popfile();
 }
@@ -622,7 +628,7 @@ void popallfiles() {
  * after a fork is done.
  */
 
-void closescript() {
+void closescript(void) {
       popallfiles();
       if (parsefile->fd > 0) {
 	    close(parsefile->fd);

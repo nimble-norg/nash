@@ -77,8 +77,7 @@ truecmd		-s : -u true
 umaskcmd	-u umask
 unsetcmd	-s unset
 waitcmd		-u wait
-exprcmd         test [ [[
-
+exprcmd		test [ [[
 
 
 

@@ -4,11 +4,22 @@
  * by the Ash General Public License.  See the file named LICENSE.
  */
 
+#define _POSIX_C_SOURCE 200809L
+
 #include "shell.h"
+#include <sys/types.h>
+#include <sys/ioctl.h>
+#include <sys/wait.h>
+#include <signal.h>
+#include <fcntl.h>
+#include <unistd.h>
+#include <string.h>
+
 #if JOBS
 #include "sgtty.h"
 #undef CEOF			/* syntax.h redefines this */
 #endif
+
 #include "main.h"
 #include "parser.h"
 #include "nodes.h"
@@ -22,16 +33,13 @@
 #include "memalloc.h"
 #include "error.h"
 #include "mystring.h"
-#include <fcntl.h>
-#include <signal.h>
+#include <errno.h>
 #include "myerrno.h"
+
 #ifdef BSD
-#include <sys/wait.h>
 #include <sys/time.h>
 #include <sys/resource.h>
 #endif
-#include<unistd.h>
-#include <sys/wait.h>
 
 struct job *jobtab;		/* array of jobs */
 int njobs;			/* size of array */
@@ -41,24 +49,16 @@ int initialpgrp;		/* pgrp of shell on invocation */
 short curjob;			/* current job */
 #endif
 
-#ifdef __STDC__
-STATIC void restartjob(struct job *);
-STATIC struct job *getjob(char *);
-STATIC void freejob(struct job *);
-STATIC int procrunning(int);
-STATIC int dowait(int, struct job *);
-STATIC int waitproc(int, int *);
-STATIC char *commandtext(union node *);
-#else
-STATIC void restartjob();
-STATIC struct job *getjob();
-STATIC void freejob();
-STATIC int procrunning();
-STATIC int dowait();
-STATIC int waitproc();
-STATIC char *commandtext();
+#if JOBS
+static void restartjob(struct job *);
 #endif
-
+static struct job *getjob(char *);
+static void freejob(struct job *);
+static int dowait(int, struct job *);
+static int waitproc(int, int *);
+static char *commandtext(union node *);
+static void cmdtxt(union node *);
+static void cmdputs(char *);
 
  
 #if JOBS
@@ -156,7 +156,7 @@ int bgcmd(int argc, char **argv) {
 }
 
 
-STATIC void restartjob(struct job *jp) {
+static void restartjob(struct job *jp) {
       struct procstat *ps;
       int i;
 
@@ -259,7 +259,7 @@ void showjobs(int change) {
  * Mark a job structure as unused.
  */
 
-STATIC void freejob(struct job *jp) {
+static void freejob(struct job *jp) {
       struct procstat *ps;
       int i;
 
@@ -339,9 +339,9 @@ int jobidcmd(int argc, char **argv) {
  * Convert a job name to a job structure.
  */
 
-STATIC struct job *getjob(char *name) {
+static struct job *getjob(char *name) {
       int jobno;
-      register struct job *jp;
+      struct job *jp;
       int pid;
       int i;
 
@@ -365,7 +365,7 @@ currentjob:
 		  goto currentjob;
 #endif
 	    } else {
-		  register struct job *found = NULL;
+		  struct job *found = NULL;
 		  for (jp = jobtab, i = njobs ; --i >= 0 ; jp++) {
 			if (jp->used && jp->nprocs > 0
 			 && prefix(name + 1, jp->ps[0].cmd)) {
@@ -386,6 +386,7 @@ currentjob:
 	    }
       }
       error("No such job: %s", name);
+      return NULL;
 }
 
 
@@ -404,10 +405,10 @@ struct job *makejob(union node *node, int nprocs) {
                   if (njobs == 0) {
                         jobtab = ckmalloc(4 * sizeof jobtab[0]);
                   } else {
-                        jp = ckmalloc((njobs + 4) * sizeof jobtab[0]);
-                        bcopy(jobtab, jp, njobs * sizeof jp[0]);
+                        struct job *newtab = ckmalloc((njobs + 4) * sizeof jobtab[0]);
+                        memcpy(newtab, jobtab, njobs * sizeof jobtab[0]);
                         ckfree(jobtab);
-                        jobtab = jp;
+                        jobtab = newtab;
                   }
                   jp = jobtab + njobs;
                   for (i = 4 ; --i >= 0 ; jobtab[njobs++].used = 0);
@@ -554,7 +555,7 @@ int forkshell(struct job* jp, union node *n, int mode) {
  * confuse this approach.
  */
 
-int waitforjob(register struct job *jp) {
+int waitforjob(struct job *jp) {
 #if JOBS
       int mypgrp = getpgrp(0);
 #endif
@@ -599,7 +600,7 @@ int waitforjob(register struct job *jp) {
  * Wait for a process to terminate.
  */
 
-STATIC int dowait(int block, struct job *job) {
+static int dowait(int block, struct job *job) {
       int pid;
       int status;
       struct procstat *sp;
@@ -714,15 +715,15 @@ STATIC int dowait(int block, struct job *job) {
  */
 
 #ifdef SYSV
-STATIC int gotsigchild;
+static int gotsigchild;
 
-void onsigchild() {
+void onsigchild(int sig) {
       gotsigchild = 1;
 }
 #endif
 
 
-STATIC int waitproc(int block, int *status) {
+static int waitproc(int block, int *status) {
 #ifdef BSD
       int flags;
 
@@ -761,11 +762,10 @@ STATIC int waitproc(int block, int *status) {
  * jobs command.
  */
 
-STATIC char *cmdnextc;
-STATIC int cmdnleft;
-STATIC void cmdtxt(), cmdputs();
+static char *cmdnextc;
+static int cmdnleft;
 
-STATIC char *commandtext(union node * n) {
+static char *commandtext(union node * n) {
       char *name;
 
       cmdnextc = name = ckmalloc(50);
@@ -776,7 +776,7 @@ STATIC char *commandtext(union node * n) {
 }
 
 
-STATIC void cmdtxt(union node *n) {
+static void cmdtxt(union node *n) {
       union node *np;
       struct nodelist *lp;
       char *p;
@@ -898,9 +898,9 @@ redir:
 
 
 
-STATIC void cmdputs(char *s) {
-      register char *p, *q;
-      register char c;
+static void cmdputs(char *s) {
+      char *p, *q;
+      char c;
       int subtype = 0;
 
       if (cmdnleft <= 0)
@@ -920,7 +920,7 @@ STATIC void cmdputs(char *s) {
 		  subtype = 0;
 	    } else if (c == CTLENDVAR) {
 		  *q++ = '}';
-            } else if (c == CTLBACKQ | c == CTLBACKQ+CTLQUOTE)
+            } else if (c == (char)CTLBACKQ || c == (char)(CTLBACKQ+CTLQUOTE))
                   cmdnleft++;		/* ignore it */
             else
                   *q++ = c;
@@ -933,3 +933,4 @@ STATIC void cmdputs(char *s) {
       }
       cmdnextc = q;
 }
+

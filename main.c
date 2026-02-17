@@ -10,6 +10,7 @@
 #include <unistd.h>
 #include <fcntl.h>
 #include <string.h>
+#include <setjmp.h>
 
 #include "shell.h"
 #include "main.h"
@@ -30,6 +31,12 @@
 #include "init.h"
 #include "mystring.h"
 #include "exec.h"
+
+extern int exception;
+extern int pendingsig; 
+extern struct jmploc *handler;
+extern char *commandname;
+extern int exitstatus;
 
 #define PROFILE 0
 
@@ -56,6 +63,7 @@ int main(int argc, char **argv) {
       monitor(4, etext, profile_buf, sizeof profile_buf, 50);
 #endif
       state = 0;
+      
       if (setjmp(jmploc.loc)) {
 	    if (exception == EXSHELLPROC) {
 		  rootpid = getpid();
@@ -76,48 +84,54 @@ int main(int argc, char **argv) {
 	    }
 	    popstackmark(&smark);
 	    FORCEINTON;
-	    
-	    if (state == 1)
-		  goto state1;
-	    else if (state == 2)
-		  goto state2;
-	    else
-		  goto state3;
-      }
-      
-      handler = &jmploc;
+      } else {
+            handler = &jmploc;
 
 #ifdef DEBUG
-      opentrace();
-      trputs("Shell args:  ");  
-      trargs(argv);
+            opentrace();
+            trputs("Shell args:  ");  
+            trargs(argv);
 #endif
 
-      rootpid = getpid();
-      rootshell = 1;
-      init();
-      setstackmark(&smark);
-      procargs(argc, argv);
+            rootpid = getpid();
+            rootshell = 1;
+            init();
+            setstackmark(&smark);
+            procargs(argc, argv);
+      }
       
-      if (argv[0] && argv[0][0] == '-') {
-	    state = 1;
-	    read_profile("/etc/profile");
-state1:
-	    state = 2;
-	    read_profile(".profile");
-      } else if ((sflag || minusc) && (shinit = getenv("SHINIT")) != NULL) {
-	    state = 2;
-	    evalstring(shinit);
+      while (state < 4) {
+            switch (state) {
+                  case 0:
+                        if (argv[0] && argv[0][0] == '-') {
+                              state = 1;
+                              read_profile("/etc/profile");
+                        } else if ((sflag || minusc) && (shinit = getenv("SHINIT")) != NULL) {
+                              state = 2;
+                              evalstring(shinit);
+                        } else {
+                              state = 2;
+                        }
+                        break;
+                  case 1:
+                        state = 2;
+                        read_profile(".profile");
+                        break;
+                  case 2:
+                        state = 3;
+                        if (minusc) {
+                              evalstring(minusc);
+                        }
+                        break;
+                  case 3:
+                        if (sflag || minusc == NULL) {
+                              cmdloop(1);
+                        }
+                        state = 4;
+                        break;
+            }
       }
-state2:
-      state = 3;
-      if (minusc) {
-	    evalstring(minusc);
-      }
-      if (sflag || minusc == NULL) {
-state3:
-	    cmdloop(1);
-      }
+
 #if PROFILE
       monitor(0);
 #endif
@@ -135,7 +149,7 @@ void cmdloop(int top) {
       setstackmark(&smark);
       numeof = 0;
       for (;;) {
-	    if (sigpending)
+	    if (pendingsig)
 		  dotrap();
 	    inter = 0;
 	    if (iflag && top) {
