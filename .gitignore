@@ -15,9 +15,11 @@ bltin/operators.o
 bltin/regexp.o
 bltin/\[
 bltin/\:
+bltin/\[[
 mknodes
 mksyntax
 log
 mksignames
 ash
 nash
+nash_unstripped

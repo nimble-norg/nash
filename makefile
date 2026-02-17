@@ -20,9 +20,10 @@ GENERATEDFILES=syntax.h syntax.c signames.h signames.c nodes.c nodes.c\
 
 
 #CC=gcc
+STRIP=strip
 DEBUG=-g
-CFLAGS=$(DEBUG) -g -O2 -Wall -fcommon -static
-LDFLAGS=-static
+CFLAGS=$(DEBUG) -g -O2 -Wall -fcommon
+#LDFLAGS=
 BLTIN=bltin
 
 
@@ -34,7 +35,7 @@ make_bltin:
 
 clean:
 	rm -f $(FILES)
-	rm -f $(GENERATEDFILES) mksyntax mksignames mknodes mkinit ash nash
+	rm -f $(GENERATEDFILES) mksyntax mksignames mknodes mkinit ash nash nash_unstripped
 	rm -f bltin/bltinlib.a bltin/*.o bltin/operators.h bltin/operators.c
 
 clobber: clean
@@ -44,7 +45,9 @@ clobber: clean
 nash:$P $(FILES) $(BLTIN)/bltinlib.a $(MALLOC)
 	$(CC) -o temp $(LDFLAGS) $(DEBUG) $(FILES) $(BLTIN)/bltinlib.a $(MALLOC)
 #	ld -o temp crt0.o $(FILES) $(BLTIN)/bltinlib.a $(MALLOC) -lc
-	mv -f temp $@
+	mv -f temp $@_unstripped
+	cp $@_unstripped $@
+	$(STRIP) $@
 
 lint:
 	lint $(CFILES) init.c
