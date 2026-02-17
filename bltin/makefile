@@ -25,6 +25,7 @@ expr: expr.c bltin.h ../shell.h operators.h operators.o regexp.o error.o stalloc
 	-rm -f test '['
 	ln expr test
 	ln expr '['
+	ln expr '[['
 
 exprcmd.o: expr.c bltin.h ../shell.h operators.h
 	$(CC) -DSHELL $(CFLAGS) -c expr.c

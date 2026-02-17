@@ -160,6 +160,7 @@ int main() {
       add("$", "CVAR");
       add("}", "CENDVAR");
       add("<>();&| \t", "CSPCL");
+      add("[]", "CCTL");
       print("basesyntax");
       init();
       fputs("\n/* syntax table used when in double quotes */\n", cfile);
@@ -169,13 +170,13 @@ int main() {
       add("`", "CBQUOTE");
       add("$", "CVAR");
       add("}", "CENDVAR");
-      add("!*?[=", "CCTL");
+      add("!*?[]=", "CCTL");
       print("dqsyntax");
       init();
       fputs("\n/* syntax table used when in single quotes */\n", cfile);
       add("\n", "CNL");
       add("'", "CENDQUOTE");
-      add("!*?[=", "CCTL");
+      add("!*?[]=", "CCTL");
       print("sqsyntax");
       filltable("0");
       fputs("\n/* character classification table */\n", cfile);

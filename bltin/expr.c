@@ -99,10 +99,17 @@ int main(int argc, char **argv) {
       if (c == 't')
 	    print = 0;
       else if (c == '[') {
-	    if (! equal(argv[argc - 1], "]"))
-		  error("missing ]");
-	    argv[argc - 1] = NULL;
-	    print = 0;
+	    if (argv[0][1] == '[' && argv[0][2] == '\0') {
+		  if (argc < 3 || ! equal(argv[argc - 1], "]]"))
+			error("missing ]]");
+		  argv[argc - 1] = NULL;
+		  print = 0;
+	    } else {
+		  if (argc < 3 || ! equal(argv[argc - 1], "]"))
+			error("missing ]");
+		  argv[argc - 1] = NULL;
+		  print = 0;
+	    }
       }
       ap = argv + 1;
       fs.name = NULL;

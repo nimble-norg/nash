@@ -30,6 +30,7 @@ int truecmd();
 int umaskcmd();
 int unsetcmd();
 int waitcmd();
+int exprcmd();
 
 int (*const builtinfunc[])() = {
 	bltincmd,
@@ -57,6 +58,7 @@ int (*const builtinfunc[])() = {
 	umaskcmd,
 	unsetcmd,
 	waitcmd,
+	exprcmd,
 };
 
 const struct builtincmd builtincmd[] = {
@@ -118,5 +120,8 @@ const struct builtincmd builtincmd[] = {
 	"unset", 23,
 	"-u", 24,
 	"wait", 24,
+	"test", 25,
+	"[", 25,
+	"[[", 25,
 	NULL, 0
 };

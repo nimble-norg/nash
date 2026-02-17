@@ -27,6 +27,7 @@
 #define UMASKCMD 22
 #define UNSETCMD 23
 #define WAITCMD 24
+#define EXPRCMD 25
 
 struct builtincmd {
       char *name;

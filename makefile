@@ -38,7 +38,7 @@ clean:
 	rm -f bltin/bltinlib.a bltin/*.o bltin/operators.h bltin/operators.c
 
 clobber: clean
-	rm -f ash bltin/catf bltin/expr bltin/test 'bltin/[' bltin/echo bltin/line bltin/nlecho bltin/true bltin/: bltin/umask nash
+	rm -f ash bltin/catf bltin/expr bltin/test 'bltin/[' 'bltin/[[' bltin/echo bltin/line bltin/nlecho bltin/true bltin/: bltin/umask nash
 
 
 nash:$P $(FILES) $(BLTIN)/bltinlib.a $(MALLOC)
