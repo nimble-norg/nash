@@ -56,7 +56,7 @@ const struct varinit varinit[] = {
       {&vpath,	VSTRFIXED|VTEXTFIXED,		"PATH=/usr/local/bin:/usr/local/sbin:/usr/bin:/usr/sbin:/bin:/sbin"},
       {&vps1,	VSTRFIXED|VTEXTFIXED,		"PS1=@ "},
       {&vps2,	VSTRFIXED|VTEXTFIXED,		"PS2=> "},
-      {&vvers,	VSTRFIXED|VTEXTFIXED,		"SHELLVERS=nash 0.5"},
+      {&vvers,	VSTRFIXED|VTEXTFIXED,		"SHELLVERS=nash 0.6"},
 #if ATTY
       {&vterm,	VSTRFIXED|VTEXTFIXED|VUNSET,	"TERM="},
 #endif
