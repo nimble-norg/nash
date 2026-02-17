@@ -23,6 +23,7 @@
 #include <ctype.h>
 #include <dirent.h>
 #include <sys/stat.h>
+#include "var.h"
 
 #define EOF_NLEFT -99		/* value of parsenleft when EOF pushed back */
 
@@ -65,6 +66,15 @@ static char hist[HIST_MAX][HIST_LEN];
 static int hist_count = 0;
 static int hist_pos = 0;
 
+static char *get_ps1(void) {
+      char *ps1 = vps1.text;
+      if (ps1) {
+            char *eq = strchr(ps1, '=');
+            if (eq) return eq + 1;
+      }
+      return "$ ";
+}
+
 static void enable_raw_mode(struct termios *orig) {
       struct termios raw;
       tcgetattr(STDIN_FILENO, orig);
@@ -96,6 +106,113 @@ static void hist_add(const char *line) {
             hist[HIST_MAX - 1][HIST_LEN - 1] = '\0';
       }
       hist_pos = hist_count;
+}
+
+static void tab_completion(char *buf, int *pos, int *len, int maxlen) {
+      int start = *pos;
+      while (start > 0 && buf[start - 1] != ' ') start--;
+      
+      int word_len = *pos - start;
+      if (word_len == 0) return;
+
+      char prefix[256];
+      strncpy(prefix, buf + start, word_len);
+      prefix[word_len] = '\0';
+
+      char *dir_to_open = ".";
+      char *file_prefix = prefix;
+      char *last_slash = strrchr(prefix, '/');
+      char path_buf[256];
+
+      if (last_slash) {
+            strncpy(path_buf, prefix, last_slash - prefix);
+            path_buf[last_slash - prefix] = (last_slash == prefix) ? '/' : '\0';
+            if (path_buf[0] == '\0') strcpy(path_buf, "/");
+            dir_to_open = path_buf;
+            file_prefix = last_slash + 1;
+      }
+
+      char *matches[128];
+      int match_count = 0;
+      int is_cmd = (start == 0 && !last_slash);
+
+      if (is_cmd) {
+            char *path = pathval();
+            if (path) {
+                  char *path_copy = strdup(path);
+                  char *dir_path = strtok(path_copy, ":");
+                  while (dir_path && match_count < 128) {
+                        DIR *d = opendir(dir_path);
+                        if (d) {
+                              struct dirent *de;
+                              while ((de = readdir(d)) != NULL && match_count < 128) {
+                                    if (strncmp(de->d_name, prefix, word_len) == 0 && de->d_name[0] != '.') {
+                                          int exists = 0;
+                                          for(int j=0; j<match_count; j++) 
+                                                if(strcmp(matches[j], de->d_name) == 0) exists = 1;
+                                          if(!exists) matches[match_count++] = strdup(de->d_name);
+                                    }
+                              }
+                              closedir(d);
+                        }
+                        dir_path = strtok(NULL, ":");
+                  }
+                  free(path_copy);
+            }
+      } else {
+            DIR *d = opendir(dir_to_open);
+            if (d) {
+                  struct dirent *de;
+                  int f_pref_len = strlen(file_prefix);
+                  while ((de = readdir(d)) != NULL && match_count < 128) {
+                        if (strncmp(de->d_name, file_prefix, f_pref_len) == 0) {
+                              if (strcmp(de->d_name, ".") == 0 || strcmp(de->d_name, "..") == 0) continue;
+                              matches[match_count++] = strdup(de->d_name);
+                        }
+                  }
+                  closedir(d);
+            }
+      }
+
+      if (match_count == 1) {
+            char *to_add = matches[0] + strlen(file_prefix);
+            int add_len = strlen(to_add);
+            if (*len + add_len + 1 < maxlen) {
+                  memmove(buf + *pos + add_len, buf + *pos, *len - *pos);
+                  memcpy(buf + *pos, to_add, add_len);
+                  *len += add_len;
+                  *pos += add_len;
+                  
+                  struct stat st;
+                  char full_p[512];
+                  snprintf(full_p, sizeof(full_p), "%s/%s", dir_to_open, matches[0]);
+                  if (stat(full_p, &st) == 0 && S_ISDIR(st.st_mode)) {
+                        buf[*pos] = '/';
+                  } else {
+                        buf[*pos] = ' ';
+                  }
+                  (*len)++;
+                  (*pos)++;
+                  buf[*len] = '\0';
+                  char *current_ps1 = get_ps1();
+                  write(STDOUT_FILENO, "\r", 1);
+                  write(STDOUT_FILENO, current_ps1, strlen(current_ps1));
+                  write(STDOUT_FILENO, buf, *len);
+            }
+      } else if (match_count > 1) {
+            write(STDOUT_FILENO, "\r\n", 2);
+            for (int i = 0; i < match_count; i++) {
+                  write(STDOUT_FILENO, matches[i], strlen(matches[i]));
+                  write(STDOUT_FILENO, (i == match_count - 1) ? "" : "  ", 2);
+            }
+            char *current_ps1 = get_ps1();
+            write(STDOUT_FILENO, "\r\n", 2);
+            write(STDOUT_FILENO, current_ps1, strlen(current_ps1));
+            write(STDOUT_FILENO, buf, *len);
+            for (int i = 0; i < *len - *pos; i++) write(STDOUT_FILENO, "\b", 1);
+      }
+
+      for (int i = 0; i < match_count; i++) free(matches[i]);
 }
 
 static int input_readline(char *buf, int maxlen) {
@@ -133,78 +250,7 @@ static int input_readline(char *buf, int maxlen) {
                         for (i = 0; i < len - pos + 1; i++) write(STDOUT_FILENO, "\b", 1);
                   }
             } else if (ch == '\t') {
-                  if (pos > 0) {
-                        int start = pos;
-                        while (start > 0 && buf[start - 1] != ' ') start--;
-                        
-                        char prefix[HIST_LEN];
-                        strncpy(prefix, buf + start, pos - start);
-                        prefix[pos - start] = '\0';
-                        
-                        char *matches[128];
-                        int m_count = 0;
-                        
-                        if (start == 0) {
-                              char *path = getenv("PATH");
-                              if (path) {
-                                    char *p_copy = strdup(path);
-                                    char *dir_path, *saveptr;
-                                    dir_path = strtok_r(p_copy, ":", &saveptr);
-                                    while (dir_path && m_count < 128) {
-                                          DIR *d = opendir(dir_path);
-                                          if (d) {
-                                                struct dirent *de;
-                                                while ((de = readdir(d)) != NULL && m_count < 128) {
-                                                      if (strncmp(de->d_name, prefix, strlen(prefix)) == 0) {
-                                                            if (strcmp(de->d_name, ".") != 0 && strcmp(de->d_name, "..") != 0)
-                                                                  matches[m_count++] = strdup(de->d_name);
-                                                      }
-                                                }
-                                                closedir(d);
-                                          }
-                                          dir_path = strtok_r(NULL, ":", &saveptr);
-                                    }
-                                    free(p_copy);
-                              }
-                        } else {
-                              DIR *d = opendir(".");
-                              if (d) {
-                                    struct dirent *de;
-                                    while ((de = readdir(d)) != NULL && m_count < 128) {
-                                          if (strncmp(de->d_name, prefix, strlen(prefix)) == 0) {
-                                                if (strcmp(de->d_name, ".") != 0 && strcmp(de->d_name, "..") != 0)
-                                                      matches[m_count++] = strdup(de->d_name);
-                                          }
-                                    }
-                                    closedir(d);
-                              }
-                        }
-
-                        if (m_count == 1) {
-                              int plen = strlen(prefix);
-                              int mlen = strlen(matches[0]);
-                              for (i = 0; i < mlen - plen; i++) {
-                                    if (len < maxlen - 2) {
-                                          if (pos < len) memmove(buf + pos + 1, buf + pos, len - pos);
-                                          buf[pos] = matches[0][plen + i];
-                                          write(STDOUT_FILENO, &buf[pos], len - pos + 1);
-                                          len++;
-                                          pos++;
-                                          for (int j = 0; j < len - pos; j++) write(STDOUT_FILENO, "\b", 1);
-                                    }
-                              }
-                        } else if (m_count > 1) {
-                              write(STDOUT_FILENO, "\r\n", 2);
-                              for (i = 0; i < m_count; i++) {
-                                    write(STDOUT_FILENO, matches[i], strlen(matches[i]));
-                                    write(STDOUT_FILENO, "  ", 2);
-                              }
-                              write(STDOUT_FILENO, "\r\n", 2);
-                              write(STDOUT_FILENO, buf, len);
-                              for (i = 0; i < len - pos; i++) write(STDOUT_FILENO, "\b", 1);
-                        }
-                        for (i = 0; i < m_count; i++) free(matches[i]);
-                  }
+                  tab_completion(buf, &pos, &len, maxlen);
             } else if (ch == '\033') {
                   char seq[3];
                   if (read(STDIN_FILENO, &seq[0], 1) == 1 && read(STDIN_FILENO, &seq[1], 1) == 1) {
@@ -248,17 +294,29 @@ static int input_readline(char *buf, int maxlen) {
                                           write(STDOUT_FILENO, "\b", 1);
                                           pos--;
                                     }
-                              } else if (seq[1] == 'H' || seq[1] == '1') { /* Home */
-                                    if (seq[1] == '1') read(STDIN_FILENO, &seq[0], 1);
+                              } else if (seq[1] == 'H') { /* Home */
                                     while (pos > 0) {
                                           write(STDOUT_FILENO, "\b", 1);
                                           pos--;
                                     }
-                              } else if (seq[1] == 'F' || seq[1] == '4') { /* End */
-                                    if (seq[1] == '4') read(STDIN_FILENO, &seq[0], 1);
+                              } else if (seq[1] == 'F') { /* End */
                                     while (pos < len) {
                                           write(STDOUT_FILENO, &buf[pos], 1);
                                           pos++;
+                                    }
+                              } else if (seq[1] >= '1' && seq[1] <= '4') {
+                                    char tilde;
+                                    read(STDIN_FILENO, &tilde, 1);
+                                    if (seq[1] == '1') { /* Home */
+                                          while (pos > 0) {
+                                                write(STDOUT_FILENO, "\b", 1);
+                                                pos--;
+                                          }
+                                    } else if (seq[1] == '4') { /* End */
+                                          while (pos < len) {
+                                                write(STDOUT_FILENO, &buf[pos], 1);
+                                                pos++;
+                                          }
                                     }
                               }
                         }
@@ -383,7 +441,7 @@ retry:
 			if (flags >= 0 && flags & FNDELAY) {
 			      flags &=~ FNDELAY;
 			      if (fcntl(0, F_SETFL, flags) >= 0) {
-				    out2str("nash: turning off NDELAY mode\n");
+				    out2str("ash: turning off NDELAY mode\n");
 				    goto retry;
 			      }
 			}
@@ -396,7 +454,7 @@ retry:
 		  if (flags >= 0 && flags & O_NDELAY) {
 			flags &=~ O_NDELAY;
 			if (fcntl(0, F_SETFL, flags) >= 0) {
-			      out2str("nash: turning off NDELAY mode\n");
+			      out2str("ash: turning off NDELAY mode\n");
 			      goto retry;
 			}
 		  }
@@ -571,4 +629,3 @@ void closescript() {
 	    parsefile->fd = 0;
       }
 }
-
