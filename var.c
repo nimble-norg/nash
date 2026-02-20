@@ -42,24 +42,26 @@ struct var vpath;
 struct var vps1;
 struct var vps2;
 struct var vvers;
+struct var vashvers;
 #if ATTY
 struct var vterm;
 #endif
 
 const struct varinit varinit[] = {
 #if ATTY
-      {&vatty,	VSTRFIXED|VTEXTFIXED|VUNSET,	"ATTY="},
+      {&vatty,		VSTRFIXED|VTEXTFIXED|VUNSET,	"ATTY="},
 #endif
-      {&vifs,	VSTRFIXED|VTEXTFIXED,		"IFS= \t\n"},
-      {&vmail,	VSTRFIXED|VTEXTFIXED|VUNSET,	"MAIL="},
-      {&vmpath,	VSTRFIXED|VTEXTFIXED|VUNSET,	"MAILPATH="},
-      {&vpath,	VSTRFIXED|VTEXTFIXED,		"PATH=/usr/local/bin:/usr/local/sbin:/usr/bin:/usr/sbin:/bin:/sbin"},
-      {&vps1,	VSTRFIXED|VTEXTFIXED,		"PS1=@ "},
-      {&vps2,	VSTRFIXED|VTEXTFIXED,		"PS2=> "},
-      {&vvers,	VSTRFIXED|VTEXTFIXED,		"SHELLVERS=nash 0.6"},
+      {&vifs,		VSTRFIXED|VTEXTFIXED,		"IFS= \t\n"},
+      {&vmail,		VSTRFIXED|VTEXTFIXED|VUNSET,	"MAIL="},
+      {&vmpath,		VSTRFIXED|VTEXTFIXED|VUNSET,	"MAILPATH="},
+      {&vpath,		VSTRFIXED|VTEXTFIXED,		"PATH=/usr/local/bin:/usr/local/sbin:/usr/bin:/usr/sbin:/bin:/sbin"},
+      {&vps1,		VSTRFIXED|VTEXTFIXED,		"PS1=@ "},
+      {&vps2,		VSTRFIXED|VTEXTFIXED,		"PS2=> "},
+      {&vvers,		VSTRFIXED|VTEXTFIXED,		"SHELLVERS=ash 0.6"},
 #if ATTY
-      {&vterm,	VSTRFIXED|VTEXTFIXED|VUNSET,	"TERM="},
+      {&vterm,		VSTRFIXED|VTEXTFIXED|VUNSET,	"TERM="},
 #endif
+      {&vashvers,	VSTRFIXED|VTEXTFIXED,	"ASH_VERSION=@(#)NIMBLE-ORG ASH 0.6 2026/02/16"},
       {NULL,	0,				NULL}
 };
 
