@@ -45,6 +45,7 @@
 #include "output.h"
 #include "memalloc.h"
 #include "expand.h"
+#include "var.h"
 
 char *arith_buf, *arith_startbuf;
 
@@ -95,6 +96,20 @@ parse_primary(void)
 		val = strtol(arith_buf, &end, 0);
 		arith_buf = end;
 		return val;
+	}
+	/* bare variable name: look up in shell variables */
+	if (isalpha((unsigned char)*arith_buf) || *arith_buf == '_') {
+		char varname[256];
+		int  vlen = 0;
+		char *varval;
+		while ((isalnum((unsigned char)*arith_buf) || *arith_buf == '_')
+		       && vlen < (int)sizeof(varname) - 1)
+			varname[vlen++] = *arith_buf++;
+		varname[vlen] = '\0';
+		varval = lookupvar(varname);
+		if (varval == NULL || *varval == '\0')
+			return 0;
+		return strtol(varval, NULL, 0);
 	}
 	error("arithmetic expression: syntax error: \"%s\"", arith_startbuf);
 	return 0;

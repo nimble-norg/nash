@@ -58,6 +58,7 @@ static char sccsid[] = "@(#)eval.c	8.9 (Berkeley) 6/8/95";
 #include "redir.h"
 #include "input.h"
 #include "output.h"
+#include "alias.h"
 #include "trap.h"
 #include "var.h"
 #include "memalloc.h"
@@ -676,8 +677,34 @@ evalcommand(cmd, flags, backcmd)
 			if (strncmp(sp->text, PATH, sizeof(PATH) - 1) == 0)
 				path = sp->text + sizeof(PATH) - 1;
 
-		find_command(argv[0], &cmdentry, 1, path);
+		find_command(argv[0], &cmdentry, 0, path);
 		if (cmdentry.cmdtype == CMDUNKNOWN) {	/* command not found */
+			/*
+			 * The command was not found.  It may be an alias that
+			 * was registered after the current line was parsed
+			 * (e.g. "alias foo=bar; foo").  Try a runtime alias
+			 * lookup and, if found, build a synthetic command
+			 * string and evaluate it.
+			 */
+			struct alias *ap = lookupalias(argv[0], 0);
+			if (ap != NULL) {
+				int   i;
+				char *s;
+				int   slen;
+				/* compute length: alias-value + ' ' + each arg */
+				slen = (int)strlen(ap->val) + 1;
+				for (i = 1; i < argc; i++)
+					slen += (int)strlen(argv[i]) + 1;
+				s = stalloc(slen + 1);
+				strcpy(s, ap->val);
+				for (i = 1; i < argc; i++) {
+					strcat(s, " ");
+					strcat(s, argv[i]);
+				}
+				evalstring(s);
+				return;
+			}
+			outfmt(out2, "%s: not found\n", argv[0]);
 			exitstatus = 1;
 			flushout(&errout);
 			return;
@@ -689,7 +716,7 @@ evalcommand(cmd, flags, backcmd)
 				if (--argc == 0)
 					break;
 				if ((cmdentry.u.index = find_builtin(*argv)) < 0) {
-					outfmt(&errout, "ash: %s: command not found\n", *argv);
+					outfmt(&errout, "%s: not found\n", *argv);
 					exitstatus = 1;
 					flushout(&errout);
 					return;

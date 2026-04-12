@@ -186,6 +186,7 @@ list(nlflag)
 		switch (tok) {
 		case TBACKGND:
 		case TSEMI:
+			checkkwd = 2;
 			tok = readtoken();
 			/* fall through */
 		case TNL:
