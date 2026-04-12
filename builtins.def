@@ -81,6 +81,7 @@ shiftcmd	shift
 trapcmd		trap
 truecmd		: true
 umaskcmd	umask
+timecmd		time
 unaliascmd	unalias
 unsetcmd	unset
 waitcmd		wait
