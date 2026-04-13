@@ -1423,8 +1423,12 @@ setprompt(which)
 	{
 	whichprompt = which;
 
+#ifndef NO_HISTORY
 	if (!lineread_enabled)
 		out2str(getprompt(NULL));
+#else
+	out2str(getprompt(NULL));
+#endif
 }
 
 /*

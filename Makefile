@@ -3,7 +3,7 @@ CFLAGS	= -std=c99 -pedantic -Wall -Wno-implicit-function-declaration \
 	  -Wno-char-subscripts \
 	  -fcommon \
 	  -D_POSIX_C_SOURCE=200809L -D_XOPEN_SOURCE=700 \
-	  -DSHELL -DLINUX -I. -Dlint
+	  -DSHELL -DLINUX -I. -Dlint -static
 LDFLAGS	=
 LDADD	=
 

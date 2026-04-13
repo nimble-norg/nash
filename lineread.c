@@ -26,6 +26,8 @@
 
 int lineread_enabled = 0;
 
+static int lr_vi_mode = 0;   
+
 static char **lr_hist;
 static int    lr_hlen;
 static int    lr_hcap;
@@ -172,6 +174,11 @@ void lineread_init(void)
     lineread_hist_load(NULL);
     atexit(lr_atexit);
     lineread_enabled = 1;
+}
+
+void lineread_set_mode(int vi)
+{
+    lr_vi_mode = vi;
 }
 
 
@@ -481,56 +488,200 @@ char *lineread(const char *prompt)
         case 27: {
             unsigned char seq[2];
             if (read(0, &seq[0], 1) <= 0) break;
-            if (seq[0] != '[' && seq[0] != 'O') break;
-            if (read(0, &seq[1], 1) <= 0) break;
-            if (seq[0] == '[') {
-                switch (seq[1]) {
-                case 'A': 
-                hist_prev:
-                    if (hidx > 0) {
-                        if (modified && len > 0) lr_hist_push(buf);
-                        if (hidx == lr_hlen) strncpy(saved, buf, LBUF-1);
-                        hidx--;
-                        strncpy(buf, lr_hist[hidx], LBUF-1); buf[LBUF-1] = '\0';
-                        len = pos = (int)strlen(buf); modified = 0;
-                        lr_refresh(prompt, buf, len, pos);
+            if (seq[0] == '[' || seq[0] == 'O') {
+                
+                if (read(0, &seq[1], 1) <= 0) break;
+                if (seq[0] == '[') {
+                    switch (seq[1]) {
+                    case 'A': 
+                    hist_prev:
+                        if (hidx > 0) {
+                            if (modified && len > 0) lr_hist_push(buf);
+                            if (hidx == lr_hlen) strncpy(saved, buf, LBUF-1);
+                            hidx--;
+                            strncpy(buf, lr_hist[hidx], LBUF-1); buf[LBUF-1] = '\0';
+                            len = pos = (int)strlen(buf); modified = 0;
+                            lr_refresh(prompt, buf, len, pos);
+                        }
+                        break;
+                    case 'B': 
+                    hist_next:
+                        if (hidx < lr_hlen) {
+                            if (modified && len > 0) lr_hist_push(buf);
+                            hidx++;
+                            if (hidx == lr_hlen) strncpy(buf, saved, LBUF-1);
+                            else strncpy(buf, lr_hist[hidx], LBUF-1);
+                            buf[LBUF-1] = '\0';
+                            len = pos = (int)strlen(buf); modified = 0;
+                            lr_refresh(prompt, buf, len, pos);
+                        }
+                        break;
+                    case 'C': if (pos < len) { pos++; lr_refresh(prompt,buf,len,pos); } break;
+                    case 'D': if (pos > 0)  { pos--; lr_refresh(prompt,buf,len,pos); } break;
+                    case 'H': pos = 0;   lr_refresh(prompt,buf,len,pos); break;
+                    case 'F': pos = len; lr_refresh(prompt,buf,len,pos); break;
+                    case '1': case '2': case '3':
+                    case '4': case '5': case '6':
+                    case '7': case '8': {
+                        unsigned char tilde;
+                        if (read(0, &tilde, 1) <= 0) break;
+                        if (tilde != '~') break;
+                        if (seq[1]=='1'||seq[1]=='7') { pos=0;   lr_refresh(prompt,buf,len,pos); }
+                        else if (seq[1]=='4'||seq[1]=='8') { pos=len; lr_refresh(prompt,buf,len,pos); }
+                        else if (seq[1]=='3' && pos < len) {
+                            memmove(buf+pos,buf+pos+1,(size_t)(len-pos-1));
+                            len--; buf[len]='\0'; modified=1; lr_refresh(prompt,buf,len,pos);
+                        }
+                        break;
                     }
-                    break;
-                case 'B': 
-                hist_next:
-                    if (hidx < lr_hlen) {
-                        if (modified && len > 0) lr_hist_push(buf);
-                        hidx++;
-                        if (hidx == lr_hlen) strncpy(buf, saved, LBUF-1);
-                        else strncpy(buf, lr_hist[hidx], LBUF-1);
-                        buf[LBUF-1] = '\0';
-                        len = pos = (int)strlen(buf); modified = 0;
-                        lr_refresh(prompt, buf, len, pos);
                     }
-                    break;
-                case 'C': if (pos < len) { pos++; lr_refresh(prompt,buf,len,pos); } break;
-                case 'D': if (pos > 0)  { pos--; lr_refresh(prompt,buf,len,pos); } break;
-                case 'H': pos = 0;   lr_refresh(prompt,buf,len,pos); break;
-                case 'F': pos = len; lr_refresh(prompt,buf,len,pos); break;
-                case '1': case '2': case '3':
-                case '4': case '5': case '6':
-                case '7': case '8': {
-                    unsigned char tilde;
-                    if (read(0, &tilde, 1) <= 0) break;
-                    if (tilde != '~') break;
-                    if (seq[1]=='1'||seq[1]=='7') { pos=0;   lr_refresh(prompt,buf,len,pos); }
-                    else if (seq[1]=='4'||seq[1]=='8') { pos=len; lr_refresh(prompt,buf,len,pos); }
-                    else if (seq[1]=='3' && pos < len) {
-                        memmove(buf+pos,buf+pos+1,(size_t)(len-pos-1));
-                        len--; buf[len]='\0'; modified=1; lr_refresh(prompt,buf,len,pos);
-                    }
-                    break;
+                } else { 
+                    if (seq[1]=='H') { pos=0;   lr_refresh(prompt,buf,len,pos); }
+                    if (seq[1]=='F') { pos=len; lr_refresh(prompt,buf,len,pos); }
                 }
+            } else if (lr_vi_mode) {
+                
+                unsigned char vcmd = seq[0];
+                int vi_ins = 0;   
+
+                if (pos > 0) { pos--; lr_refresh(prompt, buf, len, pos); }
+
+                for (;;) {
+                    if (vi_ins) break;
+                    switch (vcmd) {
+                    
+                    case 'h': case 127:
+                        if (pos > 0) { pos--; lr_refresh(prompt,buf,len,pos); }
+                        break;
+                    case 'l': case ' ':
+                        if (pos < len - 1) { pos++; lr_refresh(prompt,buf,len,pos); }
+                        break;
+                    case '0':
+                        pos = 0; lr_refresh(prompt,buf,len,pos);
+                        break;
+                    case '$':
+                        pos = len > 0 ? len - 1 : 0;
+                        lr_refresh(prompt,buf,len,pos);
+                        break;
+                    case 'w': {
+                        while (pos < len && buf[pos] != ' ') pos++;
+                        while (pos < len && buf[pos] == ' ') pos++;
+                        if (pos > len - 1 && len > 0) pos = len - 1;
+                        lr_refresh(prompt,buf,len,pos);
+                        break;
+                    }
+                    case 'b': {
+                        if (pos > 0) pos--;
+                        while (pos > 0 && buf[pos] == ' ') pos--;
+                        while (pos > 0 && buf[pos-1] != ' ') pos--;
+                        lr_refresh(prompt,buf,len,pos);
+                        break;
+                    }
+                    case 'e': {
+                        if (pos < len - 1) pos++;
+                        while (pos < len - 1 && buf[pos] == ' ') pos++;
+                        while (pos < len - 1 && buf[pos+1] != ' ') pos++;
+                        lr_refresh(prompt,buf,len,pos);
+                        break;
+                    }
+                    
+                    case 'k': goto hist_prev;
+                    case 'j': goto hist_next;
+                    
+                    case 'x':
+                        if (pos < len) {
+                            memmove(buf+pos, buf+pos+1, (size_t)(len-pos-1));
+                            len--; buf[len] = '\0'; modified = 1;
+                            if (pos >= len && pos > 0) pos = len - 1;
+                            lr_refresh(prompt,buf,len,pos);
+                        }
+                        break;
+                    case 'X':
+                        if (pos > 0) {
+                            memmove(buf+pos-1, buf+pos, (size_t)(len-pos));
+                            len--; pos--; buf[len] = '\0'; modified = 1;
+                            lr_refresh(prompt,buf,len,pos);
+                        }
+                        break;
+                    case 'r': {
+                        unsigned char rc;
+                        if (read(0, &rc, 1) > 0 && rc >= 32 && rc < 127 && pos < len) {
+                            buf[pos] = (char)rc; modified = 1;
+                            lr_refresh(prompt,buf,len,pos);
+                        }
+                        break;
+                    }
+                    case 'd': {
+                        unsigned char dm;
+                        if (read(0, &dm, 1) <= 0) break;
+                        if (dm == 'd') {
+                            len = pos = 0; buf[0] = '\0'; modified = 1;
+                            lr_refresh(prompt,buf,len,pos);
+                        } else if (dm == '$') {
+                            len = pos; buf[len] = '\0'; modified = 1;
+                            lr_refresh(prompt,buf,len,pos);
+                        } else if (dm == '0') {
+                            memmove(buf, buf+pos, (size_t)(len-pos));
+                            len -= pos; buf[len] = '\0'; pos = 0; modified = 1;
+                            lr_refresh(prompt,buf,len,pos);
+                        } else if (dm == 'w') {
+                            int start = pos;
+                            while (pos < len && buf[pos] != ' ') pos++;
+                            while (pos < len && buf[pos] == ' ') pos++;
+                            memmove(buf+start, buf+pos, (size_t)(len-pos));
+                            len -= pos - start; buf[len] = '\0'; pos = start; modified = 1;
+                            lr_refresh(prompt,buf,len,pos);
+                        }
+                        break;
+                    }
+                    case 'c': {
+                        unsigned char cm;
+                        if (read(0, &cm, 1) <= 0) break;
+                        if (cm == 'c') {
+                            len = pos = 0; buf[0] = '\0'; modified = 1;
+                            lr_refresh(prompt,buf,len,pos); vi_ins = 1;
+                        } else if (cm == '$') {
+                            len = pos; buf[len] = '\0'; modified = 1;
+                            lr_refresh(prompt,buf,len,pos); vi_ins = 1;
+                        } else if (cm == 'w') {
+                            int start = pos;
+                            while (pos < len && buf[pos] != ' ') pos++;
+                            memmove(buf+start, buf+pos, (size_t)(len-pos));
+                            len -= pos - start; buf[len] = '\0'; pos = start; modified = 1;
+                            lr_refresh(prompt,buf,len,pos); vi_ins = 1;
+                        }
+                        break;
+                    }
+                    case 'D':
+                        len = pos; buf[len] = '\0'; modified = 1;
+                        lr_refresh(prompt,buf,len,pos);
+                        break;
+                    case 'C':
+                        len = pos; buf[len] = '\0'; modified = 1;
+                        lr_refresh(prompt,buf,len,pos); vi_ins = 1;
+                        break;
+                    case 'i': vi_ins = 1; break;
+                    case 'I':
+                        pos = 0; lr_refresh(prompt,buf,len,pos); vi_ins = 1;
+                        break;
+                    case 'a':
+                        if (pos < len) pos++;
+                        lr_refresh(prompt,buf,len,pos); vi_ins = 1;
+                        break;
+                    case 'A':
+                        pos = len; lr_refresh(prompt,buf,len,pos); vi_ins = 1;
+                        break;
+                    case '\r': case '\n':
+                        write(1, "\r\n", 2);
+                        goto done;
+                    default: break;
+                    }
+                    if (vi_ins) break;
+                    if (read(0, &vcmd, 1) <= 0) goto done;
                 }
-            } else { 
-                if (seq[1]=='H') { pos=0;   lr_refresh(prompt,buf,len,pos); }
-                if (seq[1]=='F') { pos=len; lr_refresh(prompt,buf,len,pos); }
+                
             }
+            
             break;
         }
 

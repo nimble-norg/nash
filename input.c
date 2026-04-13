@@ -59,7 +59,9 @@ static char sccsid[] = "@(#)input.c	8.3 (Berkeley) 6/9/95";
 #include "error.h"
 #include "alias.h"
 #include "parser.h"
+#ifndef NO_HISTORY
 #include "myhistedit.h"
+#endif
 
 #define EOF_NLEFT -99		/* value of parsenleft when EOF pushed back */
 
@@ -190,6 +192,7 @@ preadbuffer() {
 	flushout(&errout);
 retry:
 	p = parsenextc = parsefile->buf;
+#ifndef NO_HISTORY
 	if (parsefile->fd == 0 && lineread_enabled) {
 		const char *rl_cp;
 		int len;
@@ -209,6 +212,9 @@ retry:
 		i = read(parsefile->fd, p, BUFSIZ - 1);
 	}
 eof:
+#else
+	i = read(parsefile->fd, p, BUFSIZ - 1);
+#endif
 	if (i <= 0) {
                 if (i < 0) {
                         if (errno == EINTR)

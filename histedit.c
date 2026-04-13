@@ -48,7 +48,9 @@ static char sccsid[] = "@(#)histedit.c	8.2 (Berkeley) 5/4/95";
 #include "main.h"
 #include "output.h"
 #include "mystring.h"
+#ifndef NO_HISTORY
 #include "myhistedit.h"
+#endif
 #include "error.h"
 #include "eval.h"
 #include "memalloc.h"
@@ -60,19 +62,24 @@ static char sccsid[] = "@(#)histedit.c	8.2 (Berkeley) 5/4/95";
 void
 histedit()
 {
+#ifndef NO_HISTORY
 	if (iflag && isatty(0)) {
 		if (!lineread_enabled)
 			lineread_init();
+		lineread_set_mode(Vflag ? 1 : 0);
 	} else {
 		lineread_cleanup();
 		lineread_enabled = 0;
 	}
+#endif
 }
 
 void
 sethistsize()
 {
+#ifndef NO_HISTORY
 	/* HISTSIZE controls how many entries lineread keeps in memory.
 	 * lineread uses its own constant (HIST_MAX) for now; this hook
 	 * exists for future expansion. */
+#endif
 }
