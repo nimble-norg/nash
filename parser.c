@@ -106,6 +106,11 @@ STATIC union node *andor __P((void));
 STATIC union node *pipeline __P((void));
 STATIC union node *command __P((void));
 STATIC union node *simplecmd __P((union node **, union node *));
+STATIC union node *parsedbracket __P((void));
+STATIC union node *parsedbor __P((void));
+STATIC union node *parsedband __P((void));
+STATIC union node *parsedbnot __P((void));
+STATIC union node *parsedbprimary __P((void));
 STATIC union node *makename __P((void));
 STATIC void parsefname __P((void));
 STATIC void parseheredoc __P((void));
@@ -460,6 +465,30 @@ TRACE(("expecting DO got %s %s\n", tokname[got], got == TWORD ? wordtext : ""));
 			synexpect(TEND);
 		checkkwd = 1;
 		break;
+	case TDBRACKET:
+		n1 = parsedbracket();
+		checkkwd = 1;
+		break;
+	case TFUNCTION: {
+		union node *fname;
+
+		checkkwd = 0;
+		if (readtoken() != TWORD)
+			synerror("function name expected");
+		fname = (union node *)stalloc(sizeof (struct narg));
+		fname->type = NDEFUN;
+		fname->narg.text = wordtext;
+		fname->narg.backquote = backquotelist;
+		if (readtoken() == TLP) {
+			if (readtoken() != TRP)
+				synexpect(TRP);
+		} else {
+			tokpushback++;
+		}
+		checkkwd = 1;
+		fname->narg.next = command();
+		return fname;
+	}
 	/* Handle an empty command like other simple commands.  */
 	case TSEMI:
 		/*
@@ -495,6 +524,172 @@ TRACE(("expecting DO got %s %s\n", tokname[got], got == TWORD ? wordtext : ""));
 		}
 		n1->nredir.redirect = redir;
 	}
+	return n1;
+}
+
+
+
+STATIC union node *
+parsedbprimary() {
+	union node *argnode, *lhs, *n;
+	char *lhs_text;
+	struct nodelist *lhs_bq;
+	int dbop;
+	int bdbop;
+	int tok;
+
+	if (readtoken() != TWORD)
+		synerror("operator or word expected in [[");
+
+	dbop = 0;
+	if (wordtext[0] == '-' && wordtext[1] != '\0' && wordtext[2] == '\0') {
+		switch (wordtext[1]) {
+		case 'e': dbop = DBOP_e; break;
+		case 'f': dbop = DBOP_f; break;
+		case 'd': dbop = DBOP_d; break;
+		case 'r': dbop = DBOP_r; break;
+		case 'w': dbop = DBOP_w; break;
+		case 'x': dbop = DBOP_x; break;
+		case 'L': dbop = DBOP_L; break;
+		case 'S': dbop = DBOP_S; break;
+		case 'n': dbop = DBOP_n; break;
+		case 'z': dbop = DBOP_z; break;
+		default:  break;
+		}
+	}
+	if (dbop != 0) {
+		if (readtoken() != TWORD)
+			synerror("argument expected in [[");
+		argnode = (union node *)stalloc(sizeof (struct narg));
+		argnode->type = NARG;
+		argnode->narg.text = wordtext;
+		argnode->narg.backquote = backquotelist;
+		argnode->narg.next = NULL;
+		n = (union node *)stalloc(sizeof (struct ndbracket));
+		n->type = NDBRACKET;
+		n->ndbracket.op = dbop;
+		n->ndbracket.arg = argnode;
+		return n;
+	}
+
+	lhs_text = wordtext;
+	lhs_bq = backquotelist;
+
+	bdbop = 0;
+	tok = readtoken();
+	if (tok == TWORD) {
+		if (equal(wordtext, "==") || equal(wordtext, "="))
+			bdbop = DBOP_seq;
+		else if (equal(wordtext, "!="))
+			bdbop = DBOP_ne;
+		else if (equal(wordtext, "-eq"))
+			bdbop = DBOP_eq;
+		else if (equal(wordtext, "-ne"))
+			bdbop = DBOP_ne;
+		else if (equal(wordtext, "-lt"))
+			bdbop = DBOP_lt;
+		else if (equal(wordtext, "-le"))
+			bdbop = DBOP_le;
+		else if (equal(wordtext, "-gt"))
+			bdbop = DBOP_gt;
+		else if (equal(wordtext, "-ge"))
+			bdbop = DBOP_ge;
+		else
+			synerror("unknown binary operator in [[");
+	} else if (tok == TREDIR && redirnode->type == NFROM) {
+		if (readtoken() == TWORD && equal(wordtext, "="))
+			bdbop = DBOP_le;
+		else {
+			tokpushback++;
+			bdbop = DBOP_lt;
+		}
+	} else if (tok == TREDIR && redirnode->type == NTO) {
+		if (readtoken() == TWORD && equal(wordtext, "="))
+			bdbop = DBOP_ge;
+		else {
+			tokpushback++;
+			bdbop = DBOP_gt;
+		}
+	} else {
+		synerror("binary operator expected in [[");
+	}
+
+	if (readtoken() != TWORD)
+		synerror("right-hand side expected in [[");
+
+	lhs = (union node *)stalloc(sizeof (struct narg));
+	lhs->type = NARG;
+	lhs->narg.text = lhs_text;
+	lhs->narg.backquote = lhs_bq;
+	lhs->narg.next = NULL;
+
+	argnode = (union node *)stalloc(sizeof (struct narg));
+	argnode->type = NARG;
+	argnode->narg.text = wordtext;
+	argnode->narg.backquote = backquotelist;
+	argnode->narg.next = NULL;
+
+	n = (union node *)stalloc(sizeof (struct ndbracketb));
+	n->type = NDBRACKETB;
+	n->ndbracketb.op = bdbop;
+	n->ndbracketb.lhs = lhs;
+	n->ndbracketb.rhs = argnode;
+	return n;
+}
+
+STATIC union node *
+parsedbnot() {
+	union node *n;
+
+	if (readtoken() == TWORD && equal(wordtext, "!")) {
+		n = (union node *)stalloc(sizeof (struct nnot));
+		n->type = NNOT;
+		n->nnot.com = parsedbnot();
+		return n;
+	}
+	tokpushback++;
+	return parsedbprimary();
+}
+
+STATIC union node *
+parsedband() {
+	union node *n1, *n2;
+
+	n1 = parsedbnot();
+	while (readtoken() == TAND) {
+		n2 = (union node *)stalloc(sizeof (struct nbinary));
+		n2->type = NAND;
+		n2->nbinary.ch1 = n1;
+		n2->nbinary.ch2 = parsedbnot();
+		n1 = n2;
+	}
+	tokpushback++;
+	return n1;
+}
+
+STATIC union node *
+parsedbor() {
+	union node *n1, *n2;
+
+	n1 = parsedband();
+	while (readtoken() == TOR) {
+		n2 = (union node *)stalloc(sizeof (struct nbinary));
+		n2->type = NOR;
+		n2->nbinary.ch1 = n1;
+		n2->nbinary.ch2 = parsedband();
+		n1 = n2;
+	}
+	tokpushback++;
+	return n1;
+}
+
+STATIC union node *
+parsedbracket() {
+	union node *n1;
+
+	n1 = parsedbor();
+	if (readtoken() != TWORD || !equal(wordtext, "]]"))
+		synerror("]] expected");
 	return n1;
 }
 
@@ -1135,7 +1330,7 @@ parsesub: {
 #endif
 
 	c = pgetc();
-	if (c != '(' && c != '{' && !is_name(c) && !is_special(c)) {
+	if (c != '(' && c != '{' && c != '\'' && !is_name(c) && !is_special(c)) {
 		USTPUTC('$', out);
 		pungetc();
 	} else if (c == '(') {	/* $(command) or $((arith)) */
@@ -1145,6 +1340,92 @@ parsesub: {
 			pungetc();
 			PARSEBACKQNEW();
 		}
+	} else if (c == '\'') {	/* $'...' ANSI-C quoting */
+		int ansi_ch;
+		int ansi_val;
+		quotef++;
+		for (;;) {
+			ansi_ch = pgetc();
+			if (ansi_ch == '\'' || ansi_ch == PEOF)
+				break;
+			if (ansi_ch == '\\') {
+				ansi_ch = pgetc();
+				switch (ansi_ch) {
+				case 'a':  ansi_ch = '\a'; break;
+				case 'b':  ansi_ch = '\b'; break;
+				case 'e':
+				case 'E':  ansi_ch = '\033'; break;
+				case 'f':  ansi_ch = '\f'; break;
+				case 'n':  ansi_ch = '\n'; break;
+				case 'r':  ansi_ch = '\r'; break;
+				case 't':  ansi_ch = '\t'; break;
+				case 'v':  ansi_ch = '\v'; break;
+				case '\\': ansi_ch = '\\'; break;
+				case '\'': ansi_ch = '\''; break;
+				case '"':  ansi_ch = '"';  break;
+				case '?':  ansi_ch = '?';  break;
+				case '0': case '1': case '2': case '3':
+				case '4': case '5': case '6': case '7':
+					ansi_val = ansi_ch - '0';
+					ansi_ch = pgetc();
+					if (ansi_ch >= '0' && ansi_ch <= '7') {
+						ansi_val = ansi_val * 8 + (ansi_ch - '0');
+						ansi_ch = pgetc();
+						if (ansi_ch >= '0' && ansi_ch <= '7')
+							ansi_val = ansi_val * 8 + (ansi_ch - '0');
+						else
+							pungetc();
+					} else {
+						pungetc();
+					}
+					ansi_ch = ansi_val & 0xFF;
+					break;
+				case 'x': {
+					int ansi_c2;
+					ansi_c2 = pgetc();
+					if (!((ansi_c2 >= '0' && ansi_c2 <= '9') ||
+					      (ansi_c2 >= 'a' && ansi_c2 <= 'f') ||
+					      (ansi_c2 >= 'A' && ansi_c2 <= 'F'))) {
+						pungetc();
+						STPUTC('\\', out);
+						ansi_ch = 'x';
+						goto ansi_output;
+					}
+					ansi_val = 0;
+					do {
+						if (ansi_c2 >= '0' && ansi_c2 <= '9')
+							ansi_val = ansi_val * 16 + (ansi_c2 - '0');
+						else if (ansi_c2 >= 'a' && ansi_c2 <= 'f')
+							ansi_val = ansi_val * 16 + (ansi_c2 - 'a' + 10);
+						else
+							ansi_val = ansi_val * 16 + (ansi_c2 - 'A' + 10);
+						ansi_c2 = pgetc();
+					} while ((ansi_c2 >= '0' && ansi_c2 <= '9') ||
+					         (ansi_c2 >= 'a' && ansi_c2 <= 'f') ||
+					         (ansi_c2 >= 'A' && ansi_c2 <= 'F'));
+					pungetc();
+					ansi_ch = ansi_val & 0xFF;
+					break;
+				}
+				case 'c':
+					ansi_ch = pgetc();
+					if (ansi_ch == PEOF)
+						goto ansi_done;
+					ansi_ch = (ansi_ch == '?') ? 0x7F : (ansi_ch & 0x1F);
+					break;
+				default:
+					STPUTC('\\', out);
+					break;
+				}
+			}
+ansi_output:
+			if (ansi_ch == '\0')
+				continue;
+			if (SQSYNTAX[ansi_ch] == CCTL)
+				STPUTC(CTLESC, out);
+			STPUTC(ansi_ch, out);
+		}
+ansi_done:;
 	} else {
 		USTPUTC(CTLVAR, out);
 		typeloc = out - stackblock();

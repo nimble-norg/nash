@@ -69,6 +69,8 @@ TEND	1	"}"
 TCASE	0	"case"
 TESAC	1	"esac"
 TNOT	0	"!"
+TDBRACKET 0	"[["
+TFUNCTION 0	"function"
 !
 nl=`wc -l /tmp/ka$$`
 exec > token.def

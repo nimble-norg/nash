@@ -39,6 +39,8 @@ static char sccsid[] = "@(#)eval.c	8.9 (Berkeley) 6/8/95";
 #endif /* not lint */
 
 #include <signal.h>
+#include <stdlib.h>
+#include <sys/stat.h>
 #include <unistd.h>
 
 /*
@@ -97,6 +99,8 @@ STATIC void evalsubshell __P((union node *, int));
 STATIC void expredir __P((union node *));
 STATIC void evalpipe __P((union node *));
 STATIC void evalcommand __P((union node *, int, struct backcmd *));
+STATIC void evaldbracket __P((union node *));
+STATIC void evaldbracketb __P((union node *));
 STATIC void prehash __P((union node *));
 
 
@@ -256,7 +260,12 @@ evaltree(n, flags)
 		evaltree(n->nnot.com, EV_TESTED);
 		exitstatus = !exitstatus;
 		break;
-
+	case NDBRACKET:
+		evaldbracket(n);
+		break;
+	case NDBRACKETB:
+		evaldbracketb(n);
+		break;
 	case NPIPE:
 		evalpipe(n);
 		break;
@@ -566,6 +575,106 @@ out:
 		result->fd, result->buf, result->nleft, result->jp));
 }
 
+
+
+/*
+ * Execute a [[ compound test command.
+ */
+
+STATIC void
+evaldbracket(n)
+	union node *n;
+{
+	struct arglist arglist;
+	char *arg;
+	struct stat st;
+	int op;
+	int result;
+
+	arglist.list = NULL;
+	arglist.lastp = &arglist.list;
+	expandarg(n->ndbracket.arg, &arglist, EXP_TILDE);
+	arg = arglist.list ? arglist.list->text : "";
+	op = n->ndbracket.op;
+
+	if (op == DBOP_n) {
+		exitstatus = (*arg != '\0') ? 0 : 1;
+		return;
+	}
+	if (op == DBOP_z) {
+		exitstatus = (*arg == '\0') ? 0 : 1;
+		return;
+	}
+	if (op == DBOP_L) {
+		exitstatus = (lstat(arg, &st) == 0 && S_ISLNK(st.st_mode)) ? 0 : 1;
+		return;
+	}
+	if (stat(arg, &st) != 0) {
+		exitstatus = 1;
+		return;
+	}
+	switch (op) {
+	case DBOP_e: result = 1; break;
+	case DBOP_f: result = S_ISREG(st.st_mode); break;
+	case DBOP_d: result = S_ISDIR(st.st_mode); break;
+	case DBOP_r: result = (access(arg, R_OK) == 0); break;
+	case DBOP_w: result = (access(arg, W_OK) == 0); break;
+	case DBOP_x: result = (access(arg, X_OK) == 0); break;
+	case DBOP_S: result = S_ISSOCK(st.st_mode); break;
+	default:     result = 0; break;
+	}
+	exitstatus = result ? 0 : 1;
+}
+
+
+STATIC void
+evaldbracketb(n)
+	union node *n;
+{
+	struct arglist la, ra;
+	char *lhs, *rhs;
+	int op;
+	long lv, rv;
+	char *ep;
+	int result;
+
+	la.list = NULL; la.lastp = &la.list;
+	ra.list = NULL; ra.lastp = &ra.list;
+	expandarg(n->ndbracketb.lhs, &la, EXP_TILDE);
+	expandarg(n->ndbracketb.rhs, &ra, EXP_TILDE);
+	lhs = la.list ? la.list->text : "";
+	rhs = ra.list ? ra.list->text : "";
+	op = n->ndbracketb.op;
+
+	if (op == DBOP_seq) {
+		exitstatus = (strcmp(lhs, rhs) == 0) ? 0 : 1;
+		return;
+	}
+	if (op == DBOP_sne) {
+		exitstatus = (strcmp(lhs, rhs) != 0) ? 0 : 1;
+		return;
+	}
+	lv = strtol(lhs, &ep, 10);
+	if (*ep != '\0') {
+		exitstatus = 2;
+		return;
+	}
+	rv = strtol(rhs, &ep, 10);
+	if (*ep != '\0') {
+		exitstatus = 2;
+		return;
+	}
+	switch (op) {
+	case DBOP_eq: result = (lv == rv); break;
+	case DBOP_ne: result = (lv != rv); break;
+	case DBOP_lt: result = (lv <  rv); break;
+	case DBOP_le: result = (lv <= rv); break;
+	case DBOP_gt: result = (lv >  rv); break;
+	case DBOP_ge: result = (lv >= rv); break;
+	default:      result = 0;          break;
+	}
+	exitstatus = result ? 0 : 1;
+}
 
 
 /*

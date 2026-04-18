@@ -73,6 +73,26 @@ extern int tokpushback;
 #define NEOF ((union node *)&tokpushback)
 extern int whichprompt;		/* 1 == PS1, 2 == PS2 */
 
+/* operator codes for NDBRACKET nodes ([[ compound command) */
+#define DBOP_e		1	/* -e: file exists */
+#define DBOP_f		2	/* -f: regular file */
+#define DBOP_d		3	/* -d: directory */
+#define DBOP_r		4	/* -r: readable */
+#define DBOP_w		5	/* -w: writable */
+#define DBOP_x		6	/* -x: executable */
+#define DBOP_L		7	/* -L: symbolic link */
+#define DBOP_S		8	/* -S: socket */
+#define DBOP_n		9	/* -n: string non-empty */
+#define DBOP_z		10	/* -z: string empty */
+#define DBOP_seq	11	/* == or =: string equal */
+#define DBOP_sne	12	/* !=: string not equal */
+#define DBOP_eq		13	/* -eq: numeric equal */
+#define DBOP_ne		14	/* -ne: numeric not equal */
+#define DBOP_lt		15	/* -lt: numeric less than */
+#define DBOP_le		16	/* -le: numeric less than or equal */
+#define DBOP_gt		17	/* -gt: numeric greater than */
+#define DBOP_ge		18	/* -ge: numeric greater than or equal */
+
 
 union node *parsecmd __P((int));
 void fixredir __P((union node *, const char *, int));

@@ -143,3 +143,14 @@ NXHERE nhere			# fd<<!
 NNOT nnot			# ! command  (actually pipeline)
 	type	int
 	com	nodeptr
+
+NDBRACKET ndbracket		# [[ unary-op word ]] compound test
+	type	int
+	op	int			# test operator (DBOP_* constant)
+	arg	nodeptr			# the word to test (NARG node)
+
+NDBRACKETB ndbracketb		# [[ lhs binary-op rhs ]] compound test
+	type	int
+	op	int			# binary test operator (DBOP_* constant)
+	lhs	nodeptr			# left-hand side word (NARG node)
+	rhs	nodeptr			# right-hand side word (NARG node)
