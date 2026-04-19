@@ -45,6 +45,9 @@
 /*	CTLBACKQ | CTLQUOTE == '\205' */
 #define	CTLARI	'\206'
 #define	CTLENDARI '\207'
+#define CTLEXTGLOB    '\210'	/* extglob prefix: followed by one of ?*+@! */
+#define CTLEXTGLOB_SEP '\211'	/* | separator within extglob subpattern */
+#define CTLEXTGLOB_END '\212'	/* closing ) of extglob subpattern */
 
 /* variable substitution byte (follows CTLVAR) */
 #define VSTYPE	0x0f		/* type of variable substitution */

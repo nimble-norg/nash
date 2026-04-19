@@ -1103,6 +1103,41 @@ readtoken1(firstc, syntax, eofmark, striptabs)
 				c = pgetc();
 				goto loop;		/* continue outer loop */
 			case CWORD:
+				if (syntax == BASESYNTAX &&
+				    (c == '?' || c == '*' || c == '+' ||
+				     c == '@' || c == '!')) {
+					int nc = pgetc();
+					if (nc == '(') {
+						int depth = 1;
+						int ec;
+						CHECKSTRSPACE(2, out);
+						USTPUTC(CTLEXTGLOB, out);
+						USTPUTC(c, out);
+						while (depth > 0) {
+							ec = pgetc();
+							if (ec == PEOF || ec == '\n')
+								synerror("missing ) in extglob");
+							if (ec == '(') {
+								depth++;
+								STPUTC(ec, out);
+							} else if (ec == ')') {
+								depth--;
+								STPUTC(depth == 0
+								    ? CTLEXTGLOB_END
+								    : ')', out);
+							} else if (ec == '|' && depth == 1) {
+								STPUTC(CTLEXTGLOB_SEP, out);
+							} else {
+								if (SQSYNTAX[ec] == CCTL)
+									STPUTC(CTLESC, out);
+								STPUTC(ec, out);
+							}
+						}
+						quotef++;
+						break;
+					}
+					pungetc();
+				}
 				USTPUTC(c, out);
 				break;
 			case CCTL:

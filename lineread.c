@@ -1,3 +1,5 @@
+#ifndef NO_HISTORY
+
 #define _POSIX_C_SOURCE 200809L
 #define _XOPEN_SOURCE   700
 
@@ -20,6 +22,7 @@
 #define LBUF         4096
 #define HIST_HARD    5000
 #define HIST_DEFAULT 100
+#define LR_MAX_CANDS 512
 
 
 
@@ -214,9 +217,33 @@ static void lr_extend_common(char *common, int *clen, const char *cand, int firs
     }
 }
 
+static int lr_cand_cmp(const void *a, const void *b)
+{
+    return strcmp(*(const char * const *)a, *(const char * const *)b);
+}
+
+static void lr_show_list(const char *prompt, const char *buf, int len, int pos,
+                         char **cands, int ncands)
+{
+    char line[PATH_MAX + 24];
+    int  i, w;
+    write(1, "\r\n", 2);
+    for (i = 0; i < ncands; i++) {
+        w = snprintf(line, sizeof line, "%3d) %s\r\n", i + 1, cands[i]);
+        if (w > 0) write(1, line, (size_t)w);
+    }
+    lr_refresh(prompt, buf, len, pos);
+}
+
+static void lr_cands_free(char **cands, int ncands)
+{
+    int i;
+    for (i = 0; i < ncands; i++) free(cands[i]);
+}
 
 static int lr_complete_command(const char *word, int wlen,
-                                char *common, int *clen)
+                                char *common, int *clen,
+                                char **cands, int *ncands)
 {
     char *path_env, *path_copy, *dir, *save;
     char  fullpath[PATH_MAX];
@@ -227,7 +254,7 @@ static int lr_complete_command(const char *word, int wlen,
     char  seen[256][NAME_MAX + 1];
     int   nseen = 0;
 
-    *clen = 0; common[0] = '\0';
+    *clen = 0; common[0] = '\0'; *ncands = 0;
     path_env = getenv("PATH");
     if (!path_env || !*path_env) return 0;
     path_copy = strdup(path_env);
@@ -261,23 +288,30 @@ static int lr_complete_command(const char *word, int wlen,
 
             lr_extend_common(common, clen, de->d_name, first);
             first = 0; found++;
+
+            if (*ncands < LR_MAX_CANDS) {
+                char *disp = malloc(strlen(fullpath) + 1);
+                if (disp) { strcpy(disp, fullpath); cands[(*ncands)++] = disp; }
+            }
         }
         closedir(d);
     }
     free(path_copy);
+    if (*ncands > 1) qsort(cands, (size_t)*ncands, sizeof(char *), lr_cand_cmp);
     return found;
 }
 
 
 static int lr_complete_path(const char *word, int wlen,
-                             char *common, int *clen)
+                             char *common, int *clen,
+                             char **cands, int *ncands)
 {
     char         dirpart[PATH_MAX], fullpath[PATH_MAX], candidate[PATH_MAX];
     const char  *prefix, *slash;
     int          plen, found = 0, first = 1, isdir;
     DIR         *d; struct dirent *de; struct stat st;
 
-    *clen = 0; common[0] = '\0';
+    *clen = 0; common[0] = '\0'; *ncands = 0;
 
     slash = strrchr(word, '/');
     if (slash) {
@@ -296,10 +330,6 @@ static int lr_complete_path(const char *word, int wlen,
     if (!d) return 0;
     while ((de = readdir(d)) != NULL) {
         
-        if (de->d_name[0] == '.' &&
-            (de->d_name[1] == '\0' || (de->d_name[1] == '.' && de->d_name[2] == '\0')))
-            continue;
-        
         if (de->d_name[0] == '.' && (plen == 0 || prefix[0] != '.'))
             continue;
         if (plen > 0 && strncmp(de->d_name, prefix, (size_t)plen) != 0) continue;
@@ -317,8 +347,14 @@ static int lr_complete_path(const char *word, int wlen,
 
         lr_extend_common(common, clen, candidate, first);
         first = 0; found++;
+
+        if (*ncands < LR_MAX_CANDS) {
+            char *disp = malloc(strlen(candidate) + 1);
+            if (disp) { strcpy(disp, candidate); cands[(*ncands)++] = disp; }
+        }
     }
     closedir(d);
+    if (*ncands > 1) qsort(cands, (size_t)*ncands, sizeof(char *), lr_cand_cmp);
     return found;
 }
 
@@ -327,6 +363,8 @@ static void lr_complete(char *buf, int *lenp, int *posp, const char *prompt)
     int  len = *lenp, pos = *posp;
     int  wstart, wlen, at_first, clen = 0, found, i;
     char common[PATH_MAX], word[LBUF];
+    char *cands[LR_MAX_CANDS];
+    int   ncands = 0;
 
     
     wstart = pos;
@@ -341,48 +379,41 @@ static void lr_complete(char *buf, int *lenp, int *posp, const char *prompt)
     strncpy(word, buf + wstart, (size_t)wlen); word[wlen] = '\0';
 
     if (at_first && strchr(word, '/') == NULL)
-        found = lr_complete_command(word, wlen, common, &clen);
+        found = lr_complete_command(word, wlen, common, &clen, cands, &ncands);
     else
-        found = lr_complete_path(word, wlen, common, &clen);
+        found = lr_complete_path(word, wlen, common, &clen, cands, &ncands);
 
     if (found == 0) { lr_bell(); return; }
 
     
-    if (clen <= wlen) {
-        
-        if (found == 1) {
-            
-            if (pos > 0 && buf[pos-1] != '/' && len < LBUF-1) {
-                memmove(buf+pos+1, buf+pos, (size_t)(len-pos));
-                buf[pos] = ' '; len++; pos++; buf[len] = '\0';
-                *lenp = len; *posp = pos;
-                lr_refresh(prompt, buf, len, pos);
-            }
-        } else {
-            lr_bell();   
-        }
-        return;
-    }
-
-    
-    {
+    if (clen > wlen) {
         int newlen = len - wlen + clen;
-        if (newlen >= LBUF) { lr_bell(); return; }
+        if (newlen >= LBUF) { lr_cands_free(cands, ncands); lr_bell(); return; }
         memmove(buf + wstart + clen, buf + pos, (size_t)(len - pos + 1));
         memcpy(buf + wstart, common, (size_t)clen);
         len = newlen;
         pos = wstart + clen;
         buf[len] = '\0';
+        *lenp = len; *posp = pos;
+        lr_refresh(prompt, buf, len, pos);
     }
 
     
-    if (found == 1 && pos > 0 && buf[pos-1] != '/' && len < LBUF-1) {
-        memmove(buf+pos+1, buf+pos, (size_t)(len-pos));
-        buf[pos] = ' '; len++; pos++; buf[len] = '\0';
+    if (found == 1) {
+        if (pos > 0 && buf[pos-1] != '/' && len < LBUF-1) {
+            memmove(buf+pos+1, buf+pos, (size_t)(len-pos));
+            buf[pos] = ' '; len++; pos++; buf[len] = '\0';
+            *lenp = len; *posp = pos;
+            lr_refresh(prompt, buf, len, pos);
+        }
+        lr_cands_free(cands, ncands);
+        return;
     }
 
+    
+    lr_show_list(prompt, buf, len, pos, cands, ncands);
+    lr_cands_free(cands, ncands);
     *lenp = len; *posp = pos;
-    lr_refresh(prompt, buf, len, pos);
 }
 
 
@@ -701,3 +732,5 @@ done:
     if (len > 0) lr_hist_push(buf);
     return buf;
 }
+
+#endif /* NO_HISTORY */

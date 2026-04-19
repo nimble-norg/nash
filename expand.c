@@ -40,6 +40,7 @@ static char sccsid[] = "@(#)expand.c	8.5 (Berkeley) 5/15/95";
 
 #include <sys/types.h>
 #include <sys/stat.h>
+#include <ctype.h>
 #include <errno.h>
 #include <dirent.h>
 #include <unistd.h>
@@ -103,6 +104,9 @@ STATIC void addfname __P((char *));
 STATIC struct strlist *expsort __P((struct strlist *));
 STATIC struct strlist *msort __P((struct strlist *, int));
 STATIC int pmatch __P((char *, char *));
+STATIC char *extglob_find_end __P((char *));
+STATIC int pmatch_alts __P((char *, char *, char *, int));
+STATIC int try_extglob __P((int, char *, char *, char *, char *));
 STATIC char *cvtnum __P((int, char *));
 
 /*
@@ -237,7 +241,19 @@ argstr(p, flag)
 			}
 			break;
 		default:
-			STPUTC(c, expdest);
+			if ((unsigned char)c == (unsigned char)CTLEXTGLOB) {
+				if (quotes)
+					STPUTC(c, expdest);
+				c = *p++;
+				if (quotes)
+					STPUTC(c, expdest);
+			} else if ((unsigned char)c == (unsigned char)CTLEXTGLOB_SEP
+				   || (unsigned char)c == (unsigned char)CTLEXTGLOB_END) {
+				if (quotes)
+					STPUTC(c, expdest);
+			} else {
+				STPUTC(c, expdest);
+			}
 		}
 	}
 breakloop:;
@@ -904,7 +920,8 @@ expandmeta(str, flag)
 		for (;;) {			/* fast check for meta chars */
 			if ((c = *p++) == '\0')
 				goto nometa;
-			if (c == '*' || c == '?' || c == '[' || c == '!')
+			if (c == '*' || c == '?' || c == '[' || c == '!'
+			    || (unsigned char)c == (unsigned char)CTLEXTGLOB)
 				break;
 		}
 		savelastp = exparg.lastp;
@@ -963,7 +980,12 @@ expmeta(enddir, name)
 	for (p = name ; ; p++) {
 		if (*p == '*' || *p == '?')
 			metaflag = 1;
-		else if (*p == '[') {
+		else if (*p == CTLEXTGLOB) {
+			metaflag = 1;
+			p++;			/* skip type char */
+			while (*p && *p != CTLEXTGLOB_END)
+				p++;
+		} else if (*p == '[') {
 			q = p + 1;
 			if (*q == '!')
 				q++;
@@ -1144,6 +1166,133 @@ msort(list, len)
  * Returns true if the pattern matches the string.
  */
 
+STATIC char *
+extglob_find_end(p)
+	char *p;
+{
+	int depth = 1;
+	while (*p) {
+		if ((unsigned char)*p == (unsigned char)CTLEXTGLOB) {
+			p += 2;
+			depth++;
+		} else if ((unsigned char)*p == (unsigned char)CTLEXTGLOB_END) {
+			if (--depth == 0)
+				return p;
+		} else if ((unsigned char)*p == (unsigned char)CTLESC) {
+			p++;
+		}
+		p++;
+	}
+	return NULL;
+}
+
+STATIC int
+pmatch_alts(sub, subend, str, slen)
+	char *sub;
+	char *subend;
+	char *str;
+	int slen;
+{
+	char *alt, *altend;
+	char saved_str, saved_alt;
+	int depth;
+	int result;
+
+	saved_str = str[slen];
+	str[slen] = '\0';
+	alt = sub;
+	while (alt < subend) {
+		altend = alt;
+		depth = 0;
+		while (altend < subend) {
+			if ((unsigned char)*altend == (unsigned char)CTLEXTGLOB) {
+				altend++;
+				depth++;
+			} else if ((unsigned char)*altend == (unsigned char)CTLEXTGLOB_END) {
+				depth--;
+			} else if ((unsigned char)*altend == (unsigned char)CTLEXTGLOB_SEP
+				   && depth == 0) {
+				break;
+			} else if ((unsigned char)*altend == (unsigned char)CTLESC) {
+				altend++;
+			}
+			altend++;
+		}
+		saved_alt = *altend;
+		*altend = '\0';
+		result = pmatch(alt, str);
+		*altend = saved_alt;
+		if (result) {
+			str[slen] = saved_str;
+			return 1;
+		}
+		alt = altend + 1;
+	}
+	str[slen] = saved_str;
+	return 0;
+}
+
+STATIC int
+try_extglob(type, sub, subend, rest, q)
+	int type;
+	char *sub;
+	char *subend;
+	char *rest;
+	char *q;
+{
+	int slen;
+	int total;
+
+	total = strlen(q);
+	if (type == '@') {
+		for (slen = 0; slen <= total; slen++)
+			if (pmatch_alts(sub, subend, q, slen)
+			    && pmatch(rest, q + slen))
+				return 1;
+		return 0;
+	}
+	if (type == '?') {
+		if (pmatch(rest, q))
+			return 1;
+		for (slen = 1; slen <= total; slen++)
+			if (pmatch_alts(sub, subend, q, slen)
+			    && pmatch(rest, q + slen))
+				return 1;
+		return 0;
+	}
+	if (type == '*') {
+		if (pmatch(rest, q))
+			return 1;
+		for (slen = 1; slen <= total; slen++) {
+			if (!pmatch_alts(sub, subend, q, slen))
+				continue;
+			if (try_extglob('*', sub, subend, rest, q + slen))
+				return 1;
+		}
+		return 0;
+	}
+	if (type == '+') {
+		for (slen = 1; slen <= total; slen++) {
+			if (!pmatch_alts(sub, subend, q, slen))
+				continue;
+			if (pmatch(rest, q + slen))
+				return 1;
+			if (try_extglob('*', sub, subend, rest, q + slen))
+				return 1;
+		}
+		return 0;
+	}
+	if (type == '!') {
+		for (slen = 0; slen <= total; slen++) {
+			if (!pmatch_alts(sub, subend, q, slen)
+			    && pmatch(rest, q + slen))
+				return 1;
+		}
+		return 0;
+	}
+	return 0;
+}
+
 int
 patmatch(pattern, string)
 	char *pattern;
@@ -1182,7 +1331,8 @@ pmatch(pattern, string)
 			break;
 		case '*':
 			c = *p;
-			if (c != CTLESC && c != '?' && c != '*' && c != '[') {
+			if (c != CTLESC && c != '?' && c != '*' && c != '['
+			    && (unsigned char)c != (unsigned char)CTLEXTGLOB) {
 				while (*q != c) {
 					if (*q == '\0')
 						return 0;
@@ -1223,6 +1373,44 @@ pmatch(pattern, string)
 			do {
 				if (c == CTLESC)
 					c = *p++;
+				if (c == '[' && *p == ':') {
+					char *cls = p + 1;
+					char *clsend = cls;
+					int clen;
+					while (*clsend
+					       && !(*clsend == ':'
+						    && clsend[1] == ']'))
+						clsend++;
+					if (*clsend) {
+						clen = clsend - cls;
+						if (clen==5 && strncmp(cls,"alpha",5)==0)
+							found |= isalpha((unsigned char)chr) != 0;
+						else if (clen==5 && strncmp(cls,"digit",5)==0)
+							found |= isdigit((unsigned char)chr) != 0;
+						else if (clen==5 && strncmp(cls,"alnum",5)==0)
+							found |= isalnum((unsigned char)chr) != 0;
+						else if (clen==5 && strncmp(cls,"lower",5)==0)
+							found |= islower((unsigned char)chr) != 0;
+						else if (clen==5 && strncmp(cls,"upper",5)==0)
+							found |= isupper((unsigned char)chr) != 0;
+						else if (clen==5 && strncmp(cls,"space",5)==0)
+							found |= isspace((unsigned char)chr) != 0;
+						else if (clen==5 && strncmp(cls,"blank",5)==0)
+							found |= (chr==' '||chr=='\t');
+						else if (clen==5 && strncmp(cls,"print",5)==0)
+							found |= isprint((unsigned char)chr) != 0;
+						else if (clen==5 && strncmp(cls,"graph",5)==0)
+							found |= isgraph((unsigned char)chr) != 0;
+						else if (clen==5 && strncmp(cls,"cntrl",5)==0)
+							found |= iscntrl((unsigned char)chr) != 0;
+						else if (clen==5 && strncmp(cls,"punct",5)==0)
+							found |= ispunct((unsigned char)chr) != 0;
+						else if (clen==6 && strncmp(cls,"xdigit",6)==0)
+							found |= isxdigit((unsigned char)chr) != 0;
+						p = clsend + 2;
+						continue;
+					}
+				}
 				if (*p == '-' && p[1] != ']') {
 					p++;
 					if (*p == CTLESC)
@@ -1239,8 +1427,18 @@ pmatch(pattern, string)
 				return 0;
 			break;
 		}
-dft:	        default:
-			if (*q++ != c)
+		default:
+			if ((unsigned char)c == (unsigned char)CTLEXTGLOB) {
+				int etype = (unsigned char)*p++;
+				char *sub = p;
+				char *subend = extglob_find_end(sub);
+				char *rest;
+				if (subend == NULL)
+					return 0;
+				rest = subend + 1;
+				return try_extglob(etype, sub, subend, rest, q);
+			}
+dft:		if (*q++ != c)
 				return 0;
 			break;
 		}
@@ -1250,6 +1448,7 @@ breakloop:
 		return 0;
 	return 1;
 }
+
 
 
 
@@ -1264,15 +1463,25 @@ rmescapes(str)
 	register char *p, *q;
 
 	p = str;
-	while (*p != CTLESC) {
+	while (*p != CTLESC
+	       && (unsigned char)*p != (unsigned char)CTLEXTGLOB) {
 		if (*p++ == '\0')
 			return;
 	}
 	q = p;
 	while (*p) {
-		if (*p == CTLESC)
+		if (*p == CTLESC) {
 			p++;
-		*q++ = *p++;
+			*q++ = *p++;
+		} else if ((unsigned char)*p == (unsigned char)CTLEXTGLOB) {
+			p++;
+			while (*p && (unsigned char)*p != (unsigned char)CTLEXTGLOB_END)
+				p++;
+			if (*p)
+				p++;
+		} else {
+			*q++ = *p++;
+		}
 	}
 	*q = '\0';
 }
