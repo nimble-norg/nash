@@ -111,6 +111,7 @@ STATIC union node *parsedbor __P((void));
 STATIC union node *parsedband __P((void));
 STATIC union node *parsedbnot __P((void));
 STATIC union node *parsedbprimary __P((void));
+STATIC int readregexword __P((void));
 STATIC union node *makename __P((void));
 STATIC void parsefname __P((void));
 STATIC void parseheredoc __P((void));
@@ -529,6 +530,144 @@ TRACE(("expecting DO got %s %s\n", tokname[got], got == TWORD ? wordtext : ""));
 
 
 
+STATIC int
+readregexword() {
+	int c;
+	char *out;
+	int paren_depth;
+	int bracket_depth;
+	int quotedbl, quotesng;
+	int nchars;
+	char *tstart;
+
+	STARTSTACKSTR(out);
+	paren_depth   = 0;
+	bracket_depth = 0;
+	quotedbl      = 0;
+	quotesng      = 0;
+	nchars        = 0;
+
+	for (;;) {
+		c = pgetc();
+		if (c == PEOF || c == '\n') { pungetc(); break; }
+
+		if (!quotesng && !quotedbl && c == '"') {
+			quotedbl = 1;
+			continue;
+		}
+		if (quotedbl) {
+			if (c == '"') { quotedbl = 0; continue; }
+			if (c == '$') goto handle_dollar;
+			if (c == '\\') {
+				int nc = pgetc();
+				if (nc == '"' || nc == '\\' || nc == '$') {
+					STPUTC(nc, out); nchars++;
+					continue;
+				}
+				pungetc();
+			}
+			STPUTC(c, out); nchars++;
+			continue;
+		}
+
+		if (!quotesng && c == '\'') {
+			quotesng = 1;
+			continue;
+		}
+		if (quotesng) {
+			if (c == '\'') { quotesng = 0; continue; }
+			STPUTC(c, out); nchars++;
+			continue;
+		}
+
+		if (c == '$') {
+handle_dollar:
+			{
+				int nc = pgetc();
+				if (is_name(nc)) {
+					STPUTC(CTLVAR, out);
+					STPUTC(VSNORMAL, out);
+					do {
+						STPUTC(nc, out);
+						nc = pgetc();
+					} while (is_in_name(nc));
+					pungetc();
+					STPUTC('=', out);
+					nchars++;
+				} else if (nc == '{') {
+					STPUTC(CTLVAR, out);
+					STPUTC(VSNORMAL, out);
+					for (;;) {
+						nc = pgetc();
+						if (nc == '}' || nc == PEOF) break;
+						STPUTC(nc, out);
+					}
+					STPUTC('=', out);
+					nchars++;
+				} else {
+					pungetc();
+					STPUTC('$', out); nchars++;
+				}
+			}
+			continue;
+		}
+
+		if (c == '\\') {
+			int nc = pgetc();
+			if (nc == PEOF || nc == '\n') { pungetc(); break; }
+			STPUTC(CTLESC, out);
+			STPUTC(nc, out); nchars++;
+			continue;
+		}
+
+		if (c == '(') { paren_depth++; STPUTC(c, out); nchars++; continue; }
+		if (c == ')') {
+			if (paren_depth > 0) {
+				paren_depth--;
+				STPUTC(c, out); nchars++;
+				continue;
+			}
+			pungetc();
+			break;
+		}
+
+		if (c == '[') {
+			bracket_depth++;
+			STPUTC(c, out); nchars++;
+			continue;
+		}
+		if (c == ']') {
+			if (bracket_depth > 0) {
+				bracket_depth--;
+				STPUTC(c, out); nchars++;
+				continue;
+			}
+			{
+				int nc = pgetc();
+				if (nc == ']') { pungetc(); pungetc(); break; }
+				pungetc();
+			}
+			STPUTC(c, out); nchars++;
+			continue;
+		}
+
+		if ((c == ' ' || c == '\t') && paren_depth == 0 && bracket_depth == 0) {
+			if (nchars == 0) continue;
+			break;
+		}
+
+		STPUTC(c, out);
+		nchars++;
+	}
+	STPUTC('\0', out);
+	tstart = stackblock();
+	grabstackblock(out - tstart + 1);
+	wordtext      = tstart;
+	backquotelist = NULL;
+	return lasttoken = TWORD;
+}
+
+
 STATIC union node *
 parsedbprimary() {
 	union node *argnode, *lhs, *n;
@@ -581,7 +720,9 @@ parsedbprimary() {
 		if (equal(wordtext, "==") || equal(wordtext, "="))
 			bdbop = DBOP_seq;
 		else if (equal(wordtext, "!="))
-			bdbop = DBOP_ne;
+			bdbop = DBOP_sne;
+		else if (equal(wordtext, "=~"))
+			bdbop = DBOP_re;
 		else if (equal(wordtext, "-eq"))
 			bdbop = DBOP_eq;
 		else if (equal(wordtext, "-ne"))
@@ -614,8 +755,12 @@ parsedbprimary() {
 		synerror("binary operator expected in [[");
 	}
 
-	if (readtoken() != TWORD)
+	if (bdbop == DBOP_re) {
+		if (readregexword() != TWORD)
+			synerror("regex pattern expected in [[");
+	} else if (readtoken() != TWORD) {
 		synerror("right-hand side expected in [[");
+	}
 
 	lhs = (union node *)stalloc(sizeof (struct narg));
 	lhs->type = NARG;

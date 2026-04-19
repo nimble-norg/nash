@@ -39,6 +39,7 @@ static char sccsid[] = "@(#)eval.c	8.9 (Berkeley) 6/8/95";
 #endif /* not lint */
 
 #include <signal.h>
+#include <regex.h>
 #include <stdlib.h>
 #include <sys/stat.h>
 #include <unistd.h>
@@ -652,6 +653,19 @@ evaldbracketb(n)
 	}
 	if (op == DBOP_sne) {
 		exitstatus = (strcmp(lhs, rhs) != 0) ? 0 : 1;
+		return;
+	}
+	if (op == DBOP_re) {
+		regex_t re;
+		int rc;
+		rc = regcomp(&re, rhs, REG_EXTENDED | REG_NOSUB);
+		if (rc != 0) {
+			exitstatus = 2;
+			return;
+		}
+		rc = regexec(&re, lhs, 0, NULL, 0);
+		regfree(&re);
+		exitstatus = (rc == 0) ? 0 : 1;
 		return;
 	}
 	lv = strtol(lhs, &ep, 10);

@@ -95,6 +95,7 @@ extern int whichprompt;		/* 1 == PS1, 2 == PS2 */
 #define DBOP_le		16	/* -le: numeric less than or equal */
 #define DBOP_gt		17	/* -gt: numeric greater than */
 #define DBOP_ge		18	/* -ge: numeric greater than or equal */
+#define DBOP_re		19	/* =~: POSIX ERE regex match */
 
 
 union node *parsecmd __P((int));
