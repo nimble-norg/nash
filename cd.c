@@ -40,6 +40,7 @@ static char sccsid[] = "@(#)cd.c	8.2 (Berkeley) 5/4/95";
 
 #include <sys/types.h>
 #include <sys/stat.h>
+#include <limits.h>
 #include <stdlib.h>
 #include <unistd.h>
 #include <errno.h>
@@ -304,6 +305,7 @@ updatepwd(dir)
 	prevdir = curdir;
 	curdir = savestr(stackblock());
 	INTON;
+	setvar("PWD", curdir, VEXPORT);
 }
 
 
@@ -332,45 +334,12 @@ pwdcmd(argc, argv)
 
 STATIC void
 getpwd() {
-	char buf[MAXPWD];
-	char *p;
-	int i;
-	int status;
-	struct job *jp;
-	int pip[2];
+	char buf[PATH_MAX];
 
 	if (curdir)
 		return;
-	INTOFF;
-	if (pipe(pip) < 0)
-		error("Pipe call failed");
-	jp = makejob((union node *)NULL, 1);
-	if (forkshell(jp, (union node *)NULL, FORK_NOJOB) == 0) {
-		close(pip[0]);
-		if (pip[1] != 1) {
-			close(1);
-			copyfd(pip[1], 1);
-			close(pip[1]);
-		}
-		execl("/bin/pwd", "pwd", (char *)0);
-		error("Cannot exec /bin/pwd");
-	}
-	close(pip[1]);
-	pip[1] = -1;
-	p = buf;
-	while ((i = read(pip[0], p, buf + MAXPWD - p)) > 0
-	     || (i == -1 && errno == EINTR)) {
-		if (i > 0)
-			p += i;
-	}
-	close(pip[0]);
-	pip[0] = -1;
-	status = waitforjob(jp);
-	if (status != 0)
-		error((char *)0);
-	if (i < 0 || p == buf || p[-1] != '\n')
-		error("pwd command failed");
-	p[-1] = '\0';
+	if (getcwd(buf, sizeof buf) == NULL)
+		error("getcwd failed: %s", strerror(errno));
 	curdir = savestr(buf);
-	INTON;
+	setvar("PWD", curdir, VEXPORT);
 }

@@ -1,9 +1,6 @@
 /*-
- * Copyright (c) 1991, 1993
+ * Copyright (c) 1993, 1994
  *	The Regents of the University of California.  All rights reserved.
- *
- * This code is derived from software contributed to Berkeley by
- * Kenneth Almquist.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -32,37 +29,120 @@
  * LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY
  * OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
  * SUCH DAMAGE.
- *
- *	@(#)eval.h	8.2 (Berkeley) 5/4/95
  */
 
-extern char *commandname;	/* currently executing command */
-extern int exitstatus;		/* exit status of last command */
-extern struct strlist *cmdenviron;  /* environment for builtin command */
+#ifndef lint
+static char sccsid[] = "@(#)operators.c	8.3 (Berkeley) 4/2/94";
+#endif /* not lint */
 
+/*
+ * Operators used in the test command.
+ */
 
-struct backcmd {		/* result of evalbackcmd */
-	int fd;			/* file descriptor to read from */
-	char *buf;		/* buffer */
-	int nleft;		/* number of chars in buffer */
-	struct job *jp;		/* job structure for command */
+#include <stdio.h>
+
+#include "operators.h"
+
+const char *const unary_op[] = {
+      "!",
+      "-b",
+      "-c",
+      "-d",
+      "-e",
+      "-f",
+      "-g",
+      "-h",
+      "-k",
+      "-n",
+      "-p",
+      "-r",
+      "-s",
+      "-t",
+      "-u",
+      "-w",
+      "-x",
+      "-z",
+      NULL
 };
 
-int evalcmd __P((int, char **));
-void evalstring __P((char *));
-union node;	/* BLETCH for ansi C */
-void evaltree __P((union node *, int));
-void evalbackcmd __P((union node *, struct backcmd *));
+const char *const binary_op[] = {
+      "-o",
+      "|",
+      "-a",
+      "&",
+      "=",
+      "!=",
+      "-eq",
+      "-ne",
+      "-gt",
+      "-lt",
+      "-le",
+      "-ge",
+      NULL
+};
 
-#define EV_EXIT   01		/* exit after evaluating tree */
-#define EV_TESTED 02		/* exit status is checked; ignore -e flag */
-int bltincmd __P((int, char **));
-int breakcmd __P((int, char **));
-int returncmd __P((int, char **));
-int falsecmd __P((int, char **));
-int truecmd __P((int, char **));
-int execcmd __P((int, char **));
+const char op_priority[] = {
+      3,
+      12,
+      12,
+      12,
+      12,
+      12,
+      12,
+      12,
+      12,
+      12,
+      12,
+      12,
+      12,
+      12,
+      12,
+      12,
+      12,
+      12,
+      1,
+      1,
+      2,
+      2,
+      4,
+      4,
+      4,
+      4,
+      4,
+      4,
+      4,
+      4,
+};
 
-/* in_function returns nonzero if we are currently evaluating a function */
-#define in_function()	funcnest
-extern int funcnest;
+const char op_argflag[] = {
+      0,
+      OP_FILE,
+      OP_FILE,
+      OP_FILE,
+      OP_FILE,
+      OP_FILE,
+      OP_FILE,
+      OP_FILE,
+      OP_FILE,
+      OP_STRING,
+      OP_FILE,
+      OP_FILE,
+      OP_FILE,
+      OP_INT,
+      OP_FILE,
+      OP_FILE,
+      OP_FILE,
+      OP_STRING,
+      0,
+      0,
+      0,
+      0,
+      OP_STRING,
+      OP_STRING,
+      OP_INT,
+      OP_INT,
+      OP_INT,
+      OP_INT,
+      OP_INT,
+      OP_INT,
+};

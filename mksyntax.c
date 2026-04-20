@@ -287,6 +287,8 @@ init()
 	syntax[base + CTLBACKQ + CTLQUOTE] = "CCTL";
 	syntax[base + CTLARI] = "CCTL";
 	syntax[base + CTLENDARI] = "CCTL";
+	syntax[base + CTLPROCIN] = "CCTL";
+	syntax[base + CTLPROCOUT] = "CCTL";
 }
 
 

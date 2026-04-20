@@ -12,7 +12,8 @@ PROG	= ash
 SRCS	= alias.c cd.c error.c eval.c exec.c expand.c \
 	  input.c jobs.c mail.c main.c memalloc.c miscbltin.c \
 	  mystring.c options.c parser.c redir.c show.c trap.c \
-	  output.c var.c arith.c setmode.c lineread.c histedit.c
+	  output.c var.c arith.c setmode.c lineread.c histedit.c \
+	  test.c operators.c
 
 GENSRCS	= builtins.c nodes.c syntax.c init.c
 

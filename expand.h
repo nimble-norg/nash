@@ -64,3 +64,5 @@ void expari __P((int));
 int patmatch __P((char *, char *));
 void rmescapes __P((char *));
 int casematch __P((union node *, char *));
+void addprocsubstfd __P((int));
+void closeprocsubstfds __P((void));

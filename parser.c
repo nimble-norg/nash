@@ -1191,6 +1191,7 @@ breakloop:
 #define PARSEBACKQOLD()	{oldstyle = 1; goto parsebackq; parsebackq_oldreturn:;}
 #define PARSEBACKQNEW()	{oldstyle = 0; goto parsebackq; parsebackq_newreturn:;}
 #define	PARSEARITH()	{goto parsearith; parsearith_return:;}
+#define PARSEPROCSUBST(dir)	{psdir = (dir); goto parseprocsubst; parseprocsubst_return:;}
 
 STATIC int
 readtoken1(firstc, syntax, eofmark, striptabs)
@@ -1210,6 +1211,7 @@ readtoken1(firstc, syntax, eofmark, striptabs)
 	int arinest;	/* levels of arithmetic expansion */
 	int parenlevel;	/* levels of parens in arithmetic */
 	int oldstyle;
+	int psdir;
 	char const *prevsyntax;	/* syntax before arithmetic */
 #if __GNUC__
 	/* Avoid longjmp clobbering */
@@ -1385,8 +1387,21 @@ readtoken1(firstc, syntax, eofmark, striptabs)
 			case CEOF:
 				goto endword;		/* exit outer loop */
 			default:
-				if (varnest == 0)
+				if (varnest == 0) {
+					if ((c == '<' || c == '>')
+					    && syntax == BASESYNTAX
+					    && !dblquote) {
+						int nc = pgetc();
+						if (nc == '(') {
+							PARSEPROCSUBST(c);
+							quotef++;
+							c = pgetc_macro();
+							goto loop;
+						}
+						pungetc();
+					}
 					goto endword;	/* exit outer loop */
+				}
 				USTPUTC(c, out);
 			}
 			c = pgetc_macro();
@@ -1784,6 +1799,64 @@ parsebackq: {
 	else
 		goto parsebackq_newreturn;
 }
+
+/*
+ * Parse process substitution:  <(list) or >(list)
+ */
+parseprocsubst: {
+	struct nodelist **nlpp;
+	int savepbq;
+	union node *n;
+	char *volatile pstr;
+	struct jmploc jmploc;
+	struct jmploc *volatile savehandler;
+	int savelen2;
+
+	savepbq = parsebackquote;
+	if (setjmp(jmploc.loc)) {
+		if (pstr)
+			ckfree(pstr);
+		parsebackquote = 0;
+		handler = savehandler;
+		longjmp(handler->loc, 1);
+	}
+	INTOFF;
+	pstr = NULL;
+	savelen2 = out - stackblock();
+	if (savelen2 > 0) {
+		pstr = ckmalloc(savelen2);
+		memcpy(pstr, stackblock(), savelen2);
+	}
+	savehandler = handler;
+	handler = &jmploc;
+	INTON;
+	nlpp = &bqlist;
+	while (*nlpp)
+		nlpp = &(*nlpp)->next;
+	*nlpp = (struct nodelist *)stalloc(sizeof (struct nodelist));
+	(*nlpp)->next = NULL;
+	parsebackquote = 0;
+	n = list(0);
+	if (readtoken() != TRP)
+		synexpect(TRP);
+	(*nlpp)->n = n;
+	while (stackblocksize() <= savelen2)
+		growstackblock();
+	STARTSTACKSTR(out);
+	if (pstr) {
+		memcpy(out, pstr, savelen2);
+		STADJUST(savelen2, out);
+		INTOFF;
+		ckfree(pstr);
+		pstr = NULL;
+		INTON;
+	}
+	parsebackquote = savepbq;
+	handler = savehandler;
+	USTPUTC(psdir == '<' ? CTLPROCIN : CTLPROCOUT, out);
+	goto parseprocsubst_return;
+}
+
 
 /*
  * Parse an arithmetic expansion (indicate start of one and set state)

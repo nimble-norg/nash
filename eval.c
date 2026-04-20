@@ -1000,6 +1000,7 @@ parent:	/* parent process gets here (if we forked) */
 	}
 
 out:
+	closeprocsubstfds();
 	if (lastarg)
 		setvar("_", lastarg, 0);
 	popstackmark(&smark);

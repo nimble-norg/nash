@@ -62,6 +62,8 @@ exitcmd		exit
 expcmd		exp let
 exportcmd	export readonly
 #exprcmd	expr test [
+testcmd		test
+bracketcmd	[
 falsecmd	false
 fgcmd -j	fg
 getoptscmd	getopts

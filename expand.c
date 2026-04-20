@@ -46,6 +46,7 @@ static char sccsid[] = "@(#)expand.c	8.5 (Berkeley) 5/15/95";
 #include <unistd.h>
 #include <pwd.h>
 #include <stdlib.h>
+#include <string.h>
 
 /*
  * Routines to expand arguments to commands.  We have to deal with
@@ -68,6 +69,7 @@ static char sccsid[] = "@(#)expand.c	8.5 (Berkeley) 5/15/95";
 #include "error.h"
 #include "mystring.h"
 #include "arith.h"
+#include "redir.h"
 #include "show.h"
 
 /*
@@ -90,6 +92,28 @@ struct ifsregion *ifslastp;	/* last struct in list */
 struct arglist exparg;		/* holds expanded arg list */
 
 STATIC void argstr __P((char *, int));
+STATIC void expprocsubst __P((int, union node *, int));
+
+#define PROCSUBST_MAX 32
+static int ps_fds[PROCSUBST_MAX];
+static int ps_nfds;
+
+void
+addprocsubstfd(fd)
+	int fd;
+{
+	if (ps_nfds < PROCSUBST_MAX)
+		ps_fds[ps_nfds++] = fd;
+}
+
+void
+closeprocsubstfds(void)
+{
+	int i;
+	for (i = 0; i < ps_nfds; i++)
+		close(ps_fds[i]);
+	ps_nfds = 0;
+}
 STATIC char *exptilde __P((char *, int));
 STATIC void expbackq __P((union node *, int, int));
 STATIC int subevalvar __P((char *, char *, int, int, int));
@@ -251,6 +275,12 @@ argstr(p, flag)
 				   || (unsigned char)c == (unsigned char)CTLEXTGLOB_END) {
 				if (quotes)
 					STPUTC(c, expdest);
+			} else if ((unsigned char)c == (unsigned char)CTLPROCIN
+				   || (unsigned char)c == (unsigned char)CTLPROCOUT) {
+				int psdir2 = ((unsigned char)c == (unsigned char)CTLPROCIN)
+				             ? '<' : '>';
+				expprocsubst(psdir2, argbackq->n, flag);
+				argbackq = argbackq->next;
 			} else {
 				STPUTC(c, expdest);
 			}
@@ -349,6 +379,69 @@ expari(flag)
 		;
 	result = expdest - p + 1;
 	STADJUST(-result, expdest);
+}
+
+
+/*
+ * Expand process substitution <(cmd) or >(cmd).
+ * Forks a child, creates a pipe, runs the command, and emits /dev/fd/N.
+ */
+
+STATIC void
+expprocsubst(dir, cmd, flag)
+	int dir;
+	union node *cmd;
+	int flag;
+{
+	int pip[2];
+	struct job *jp;
+	char fdpath[32];
+	char *dest = expdest;
+	int quotes = flag & (EXP_FULL | EXP_CASE);
+	char *p;
+	int i;
+
+	INTOFF;
+	p = grabstackstr(dest);
+	if (pipe(pip) < 0)
+		error("Pipe call failed");
+	jp = makejob(cmd, 1);
+	if (forkshell(jp, cmd, FORK_NOJOB) == 0) {
+		FORCEINTON;
+		if (dir == '<') {
+			close(pip[0]);
+			if (pip[1] != 1) {
+				close(1);
+				copyfd(pip[1], 1);
+				close(pip[1]);
+			}
+		} else {
+			close(pip[1]);
+			if (pip[0] != 0) {
+				close(0);
+				copyfd(pip[0], 0);
+				close(pip[0]);
+			}
+		}
+		evaltree(cmd, EV_EXIT);
+	}
+	if (dir == '<') {
+		close(pip[1]);
+		addprocsubstfd(pip[0]);
+		snprintf(fdpath, sizeof fdpath, "/dev/fd/%d", pip[0]);
+	} else {
+		close(pip[0]);
+		addprocsubstfd(pip[1]);
+		snprintf(fdpath, sizeof fdpath, "/dev/fd/%d", pip[1]);
+	}
+	ungrabstackstr(p, dest);
+	INTON;
+
+	for (i = 0; fdpath[i]; i++) {
+		if (quotes && BASESYNTAX[(int)(unsigned char)fdpath[i]] == CCTL)
+			STPUTC(CTLESC, expdest);
+		STPUTC(fdpath[i], expdest);
+	}
 }
 
 

@@ -48,6 +48,8 @@
 #define CTLEXTGLOB    '\210'	/* extglob prefix: followed by one of ?*+@! */
 #define CTLEXTGLOB_SEP '\211'	/* | separator within extglob subpattern */
 #define CTLEXTGLOB_END '\212'	/* closing ) of extglob subpattern */
+#define CTLPROCIN     '\213'	/* <(cmd) process substitution */
+#define CTLPROCOUT    '\214'	/* >(cmd) process substitution */
 
 /* variable substitution byte (follows CTLVAR) */
 #define VSTYPE	0x0f		/* type of variable substitution */

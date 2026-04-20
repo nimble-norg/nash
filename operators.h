@@ -1,9 +1,6 @@
 /*-
- * Copyright (c) 1991, 1993
+ * Copyright (c) 1993, 1994
  *	The Regents of the University of California.  All rights reserved.
- *
- * This code is derived from software contributed to Berkeley by
- * Kenneth Almquist.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -33,36 +30,48 @@
  * OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
  * SUCH DAMAGE.
  *
- *	@(#)eval.h	8.2 (Berkeley) 5/4/95
+ *	@(#)operators.h	8.3 (Berkeley) 4/2/94
  */
 
-extern char *commandname;	/* currently executing command */
-extern int exitstatus;		/* exit status of last command */
-extern struct strlist *cmdenviron;  /* environment for builtin command */
+#define	NOT		0
+#define	ISBLOCK		1
+#define	ISCHAR		2
+#define	ISDIR		3
+#define	ISEXIST		4
+#define	ISFILE		5
+#define	ISSETGID	6
+#define	ISSYMLINK	7
+#define	ISSTICKY	8
+#define	STRLEN		9
+#define	ISFIFO		10
+#define	ISREAD		11
+#define	ISSIZE		12
+#define	ISTTY		13
+#define	ISSETUID	14
+#define	ISWRITE		15
+#define	ISEXEC		16
+#define	NULSTR		17
+
+#define	FIRST_BINARY_OP	18
+#define	OR1		18
+#define	OR2		19
+#define	AND1		20
+#define	AND2		21
+#define	STREQ		22
+#define	STRNE		23
+#define	EQ		24
+#define	NE		25
+#define	GT		26
+#define	LT		27
+#define	LE		28
+#define	GE		29
 
 
-struct backcmd {		/* result of evalbackcmd */
-	int fd;			/* file descriptor to read from */
-	char *buf;		/* buffer */
-	int nleft;		/* number of chars in buffer */
-	struct job *jp;		/* job structure for command */
-};
+#define	OP_INT		1	/* arguments to operator are integer */
+#define	OP_STRING	2	/* arguments to operator are string */
+#define	OP_FILE		3	/* argument is a file name */
 
-int evalcmd __P((int, char **));
-void evalstring __P((char *));
-union node;	/* BLETCH for ansi C */
-void evaltree __P((union node *, int));
-void evalbackcmd __P((union node *, struct backcmd *));
-
-#define EV_EXIT   01		/* exit after evaluating tree */
-#define EV_TESTED 02		/* exit status is checked; ignore -e flag */
-int bltincmd __P((int, char **));
-int breakcmd __P((int, char **));
-int returncmd __P((int, char **));
-int falsecmd __P((int, char **));
-int truecmd __P((int, char **));
-int execcmd __P((int, char **));
-
-/* in_function returns nonzero if we are currently evaluating a function */
-#define in_function()	funcnest
-extern int funcnest;
+extern const char *const unary_op[];
+extern const char *const binary_op[];
+extern const char op_priority[];
+extern const char op_argflag[];
