@@ -66,6 +66,7 @@ falsecmd	false
 fgcmd -j	fg
 getoptscmd	getopts
 hashcmd		hash
+historycmd -h	history
 jobidcmd	jobid
 jobscmd		jobs
 #linecmd		line

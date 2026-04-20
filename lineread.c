@@ -84,7 +84,9 @@ static int lr_get_histsize(void)
 
 
 
-static void lr_hist_push(const char *line)
+static void lr_hist_push(const char *line) { lineread_hist_push(line); }
+
+void lineread_hist_push(const char *line)
 {
     int   max;
     char *copy;
@@ -132,6 +134,14 @@ static char *lr_default_hist_file(void)
     return path;
 }
 
+int lineread_hist_len(void) { return lr_hlen; }
+
+const char *lineread_hist_entry(int idx)
+{
+    if (idx < 0 || idx >= lr_hlen) return NULL;
+    return lr_hist[idx];
+}
+
 void lineread_hist_load(const char *file)
 {
     FILE *f; char line[LBUF];
@@ -173,6 +183,11 @@ void lineread_init(void)
     if (!getenv("HISTFILE")) {
         hfile = lr_default_hist_file();
         if (hfile) setenv("HISTFILE", hfile, 0);
+    }
+    if (!getenv("HISTSIZE")) {
+        char szbuf[32];
+        snprintf(szbuf, sizeof szbuf, "%d", HIST_DEFAULT);
+        setenv("HISTSIZE", szbuf, 0);
     }
     lineread_hist_load(NULL);
     atexit(lr_atexit);

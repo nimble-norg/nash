@@ -60,6 +60,9 @@ static char sccsid[] = "@(#)miscbltin.c	8.4 (Berkeley) 5/4/95";
 #include "mystring.h"
 #include "setmode.h"
 #include "exec.h"
+#ifndef NO_HISTORY
+#include "myhistedit.h"
+#endif
 
 #undef eflag
 
@@ -532,3 +535,30 @@ timecmd(argc, argv)
 
 	return WIFEXITED(status) ? WEXITSTATUS(status) : 0;
 }
+
+#ifndef NO_HISTORY
+int
+historycmd(argc, argv)
+	int argc;
+	char **argv;
+{
+	int n, i, start;
+	const char *e;
+
+	if (!iflag || !lineread_enabled) {
+		out2str("history: not available outside interactive mode\n");
+		return 1;
+	}
+	n = lineread_hist_len();
+	if (n == 0)
+		return 0;
+	start = (argc > 1) ? n - atoi(argv[1]) : 0;
+	if (start < 0) start = 0;
+	for (i = start; i < n; i++) {
+		e = lineread_hist_entry(i);
+		if (e)
+			outfmt(out1, "%8d    %s\n", i + 1, e);
+	}
+	return 0;
+}
+#endif

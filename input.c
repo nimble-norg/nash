@@ -202,12 +202,122 @@ retry:
 			i = 0;
 			goto eof;
 		}
-		strncpy(p, rl_cp, BUFSIZ - 2);
-		p[BUFSIZ - 2] = '\0';
-		len = (int)strlen(p);
-		p[len]     = '\n';
-		p[len + 1] = '\0';
-		i = len + 1;
+		{
+			static char he_buf[BUFSIZ];
+			const char *src = rl_cp;
+			int hlen = lineread_hist_len();
+
+			/* lineread() already pushed the raw line; exclude it */
+			if (hlen > 0) hlen--;
+			int expanded = 0;
+			int si, di;
+
+			di = 0;
+			he_buf[0] = '\0';
+
+			for (si = 0; src[si] != '\0' && di < BUFSIZ - 2; ) {
+				char qch = 0;
+
+				if (src[si] == '\'' || src[si] == '"') {
+					qch = src[si];
+					he_buf[di++] = src[si++];
+					while (src[si] && di < BUFSIZ - 2) {
+						he_buf[di++] = src[si];
+						if (src[si] == qch) { si++; break; }
+						si++;
+					}
+					continue;
+				}
+
+				if (src[si] == '\\' && src[si+1] != '\0') {
+					he_buf[di++] = src[si++];
+					he_buf[di++] = src[si++];
+					continue;
+				}
+
+				if (src[si] == '!'
+				    && src[si+1] != '\0'
+				    && src[si+1] != '='
+				    && src[si+1] != '(') {
+					const char *entry = NULL;
+					const char *after = NULL;
+					const char *sp = src + si + 1;
+
+					if (sp[0] == '!') {
+						if (hlen > 0)
+							entry = lineread_hist_entry(hlen - 1);
+						after = sp + 1;
+					} else if (sp[0] >= '0' && sp[0] <= '9') {
+						int idx = atoi(sp) - 1;
+						while (*sp >= '0' && *sp <= '9') sp++;
+						after = sp;
+						if (idx >= 0 && idx < hlen)
+							entry = lineread_hist_entry(idx);
+					} else if (sp[0] == '-' && sp[1] >= '0' && sp[1] <= '9') {
+						int rel = atoi(sp + 1);
+						int idx = hlen - rel;
+						sp++;
+						while (*sp >= '0' && *sp <= '9') sp++;
+						after = sp;
+						if (idx >= 0 && idx < hlen)
+							entry = lineread_hist_entry(idx);
+					} else {
+						const char *ep = sp;
+						int nlen;
+						while (*ep && *ep != ' ' && *ep != '\t'
+						       && *ep != ';' && *ep != '|'
+						       && *ep != '&') ep++;
+						nlen = (int)(ep - sp);
+						after = ep;
+						if (nlen > 0) {
+							int j;
+							for (j = hlen - 1; j >= 0; j--) {
+								const char *h = lineread_hist_entry(j);
+								if (h && strncmp(h, sp, (size_t)nlen) == 0
+								    && (h[nlen] == '\0' || h[nlen] == ' ')) {
+									entry = h;
+									break;
+								}
+							}
+						}
+					}
+
+					if (entry && after) {
+						int elen = (int)strlen(entry);
+						if (di + elen < BUFSIZ - 2) {
+							memcpy(he_buf + di, entry, (size_t)elen);
+							di += elen;
+						}
+						si = (int)(after - src);
+						expanded = 1;
+						continue;
+					}
+				}
+
+				he_buf[di++] = src[si++];
+			}
+			he_buf[di] = '\0';
+
+			if (expanded) {
+				out2str(he_buf);
+				out2str("\n");
+				flushout(&errout);
+				len = di;
+				if (len >= BUFSIZ - 2) len = BUFSIZ - 3;
+				memcpy(p, he_buf, (size_t)len);
+				p[len]     = '\n';
+				p[len + 1] = '\0';
+				i = len + 1;
+				lineread_hist_push(he_buf);
+			} else {
+				strncpy(p, src, BUFSIZ - 2);
+				p[BUFSIZ - 2] = '\0';
+				len = (int)strlen(p);
+				p[len]     = '\n';
+				p[len + 1] = '\0';
+				i = len + 1;
+			}
+		}
 	} else {
 		i = read(parsefile->fd, p, BUFSIZ - 1);
 	}

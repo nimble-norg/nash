@@ -67,6 +67,20 @@ histedit()
 		if (!lineread_enabled)
 			lineread_init();
 		lineread_set_mode(Vflag ? 1 : 0);
+		{
+			const char *hf = getenv("HISTFILE");
+			const char *hs = getenv("HISTSIZE");
+			if (hf) {
+				char *buf = ckmalloc(strlen(hf) + 10);
+				strcpy(buf, "HISTFILE=");
+				strcat(buf, hf);
+				setvar("HISTFILE", hf, VEXPORT);
+				ckfree(buf);
+			}
+			if (hs) {
+				setvar("HISTSIZE", hs, VEXPORT);
+			}
+		}
 	} else {
 		lineread_cleanup();
 		lineread_enabled = 0;

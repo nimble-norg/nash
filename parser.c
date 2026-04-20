@@ -716,6 +716,20 @@ parsedbprimary() {
 
 	bdbop = 0;
 	tok = readtoken();
+	if (tok == TAND || tok == TOR
+	    || (tok == TWORD && equal(wordtext, "]]"))) {
+		tokpushback++;
+		argnode = (union node *)stalloc(sizeof (struct narg));
+		argnode->type = NARG;
+		argnode->narg.text = lhs_text;
+		argnode->narg.backquote = lhs_bq;
+		argnode->narg.next = NULL;
+		n = (union node *)stalloc(sizeof (struct ndbracket));
+		n->type = NDBRACKET;
+		n->ndbracket.op = DBOP_n;
+		n->ndbracket.arg = argnode;
+		return n;
+	}
 	if (tok == TWORD) {
 		if (equal(wordtext, "==") || equal(wordtext, "="))
 			bdbop = DBOP_seq;
