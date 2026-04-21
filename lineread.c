@@ -29,7 +29,8 @@
 
 int lineread_enabled = 0;
 
-static int lr_vi_mode = 0;   
+static int lr_vi_mode = 0;
+static int lr_allow_complete = 1;
 
 static char **lr_hist;
 static int    lr_hlen;
@@ -121,6 +122,14 @@ void lineread_hist_push(const char *line)
     lr_hist[lr_hlen++] = copy;
 }
 
+void lineread_hist_pop(void)
+{
+    if (lr_hlen > 0) {
+        free(lr_hist[lr_hlen - 1]);
+        lr_hlen--;
+    }
+}
+
 static char *lr_default_hist_file(void)
 {
     static char path[PATH_MAX];
@@ -157,6 +166,14 @@ void lineread_hist_load(const char *file)
         if (line[0]) lr_hist_push(line);
     }
     fclose(f);
+    {
+        int max = lr_get_histsize();
+        while (lr_hlen > max) {
+            free(lr_hist[0]);
+            memmove(lr_hist, lr_hist+1, (size_t)(lr_hlen-1)*sizeof(char*));
+            lr_hlen--;
+        }
+    }
 }
 
 void lineread_hist_save(void)
@@ -199,18 +216,102 @@ void lineread_set_mode(int vi)
     lr_vi_mode = vi;
 }
 
+void lineread_set_allow_complete(int allow)
+{
+    lr_allow_complete = allow;
+}
 
 
+
+
+static int lr_term_cols(void)
+{
+    struct winsize ws;
+    if (ioctl(1, TIOCGWINSZ, &ws) == 0 && ws.ws_col > 4)
+        return (int)ws.ws_col;
+    return 80;
+}
+
+static int lr_display_width(const char *s, int len)
+{
+    int w = 0, i = 0;
+    while (i < len) {
+        unsigned char c = (unsigned char)s[i];
+        if (c == '\033') {
+            i++;
+            if (i < len && s[i] == '[') {
+                i++;
+                while (i < len && s[i] != 'm') i++;
+                if (i < len) i++;
+            }
+            continue;
+        }
+        w++;
+        i++;
+    }
+    return w;
+}
 
 static void lr_refresh(const char *prompt, const char *buf, int len, int pos)
 {
+    int cols = lr_term_cols();
+    int plen = (int)strlen(prompt);
+    int pwidth = lr_display_width(prompt, plen);
+    int buf_avail = cols - pwidth - 1;
     char tmp[LBUF + 512];
-    int  n = 0, i;
+    int n = 0, i;
+    int view_start, view_end;
+    int has_left, has_right;
+
+    if (buf_avail < 8) buf_avail = 8;
+
+    if (len <= buf_avail) {
+        view_start = 0;
+        view_end = len;
+    } else {
+        int half = buf_avail / 2;
+        view_start = pos - half;
+        if (view_start < 0) view_start = 0;
+        view_end = view_start + buf_avail;
+        if (view_end > len) {
+            view_end = len;
+            view_start = view_end - buf_avail;
+            if (view_start < 0) view_start = 0;
+        }
+    }
+    has_left  = (view_start > 0);
+    has_right = (view_end < len);
+
+    if (has_left)  buf_avail--;
+    if (has_right) buf_avail--;
+
+    if (has_left && has_right) {
+        view_end = view_start + buf_avail;
+        if (view_end > len) view_end = len;
+    } else if (has_left) {
+        view_end = view_start + buf_avail;
+        if (view_end > len) view_end = len;
+    } else if (has_right) {
+        view_end = view_start + buf_avail;
+        if (view_end > len) view_end = len;
+    }
+
     tmp[n++] = '\r';
-    for (i = 0; prompt[i]; i++) tmp[n++] = (char)prompt[i];
-    for (i = 0; i < len;   i++) tmp[n++] = buf[i];
+    for (i = 0; i < plen && n < (int)(sizeof tmp) - 4; i++)
+        tmp[n++] = prompt[i];
+    if (has_left)  tmp[n++] = '<';
+    for (i = view_start; i < view_end && n < (int)(sizeof tmp) - 4; i++)
+        tmp[n++] = buf[i];
+    if (has_right) tmp[n++] = '>';
     tmp[n++] = '\033'; tmp[n++] = '['; tmp[n++] = 'K';
-    for (i = 0; i < len - pos; i++) tmp[n++] = '\b';
+    {
+        int cursor_col = pwidth + (has_left ? 1 : 0) + (pos - view_start);
+        int line_end   = pwidth + (has_left ? 1 : 0) + (view_end - view_start)
+                         + (has_right ? 1 : 0);
+        int back = line_end - cursor_col;
+        for (i = 0; i < back && n < (int)(sizeof tmp) - 2; i++)
+            tmp[n++] = '\b';
+    }
     write(1, tmp, n);
 }
 
@@ -265,9 +366,9 @@ static int lr_complete_command(const char *word, int wlen,
     struct stat st;
     DIR  *d; struct dirent *de;
     int   found = 0, first = 1;
-    
-    char  seen[256][NAME_MAX + 1];
-    int   nseen = 0;
+
+    char  **seen = NULL;
+    int     nseen = 0, seen_cap = 0;
 
     *clen = 0; common[0] = '\0'; *ncands = 0;
     path_env = getenv("PATH");
@@ -283,23 +384,28 @@ static int lr_complete_command(const char *word, int wlen,
         while ((de = readdir(d)) != NULL) {
             int i, dup;
 
-            
             if (strncmp(de->d_name, word, (size_t)wlen) != 0) continue;
 
-            
             snprintf(fullpath, sizeof fullpath, "%s/%s", dir, de->d_name);
             if (stat(fullpath, &st) != 0) continue;
             if (S_ISDIR(st.st_mode)) continue;
             if (!(st.st_mode & (S_IXUSR|S_IXGRP|S_IXOTH))) continue;
 
-            
             dup = 0;
             for (i = 0; i < nseen; i++) {
                 if (strcmp(seen[i], de->d_name) == 0) { dup = 1; break; }
             }
             if (dup) continue;
-            if (nseen < 256)
-                strncpy(seen[nseen++], de->d_name, NAME_MAX);
+
+            if (nseen == seen_cap) {
+                int nc = seen_cap == 0 ? 64 : seen_cap * 2;
+                char **np = realloc(seen, (size_t)nc * sizeof(char *));
+                if (!np) continue;
+                seen = np; seen_cap = nc;
+            }
+            seen[nseen] = strdup(de->d_name);
+            if (!seen[nseen]) continue;
+            nseen++;
 
             lr_extend_common(common, clen, de->d_name, first);
             first = 0; found++;
@@ -312,6 +418,11 @@ static int lr_complete_command(const char *word, int wlen,
         closedir(d);
     }
     free(path_copy);
+    if (seen) {
+        int i;
+        for (i = 0; i < nseen; i++) free(seen[i]);
+        free(seen);
+    }
     if (*ncands > 1) qsort(cands, (size_t)*ncands, sizeof(char *), lr_cand_cmp);
     return found;
 }
@@ -474,7 +585,11 @@ char *lineread(const char *prompt)
             write(1, "\r\n", 2); goto done;
 
         case '\t':
-            lr_complete(buf, &len, &pos, prompt); modified = 1; break;
+            if (lr_allow_complete)
+                lr_complete(buf, &len, &pos, prompt);
+            else
+                lr_bell();
+            modified = 1; break;
 
         case 127: case 8:
             if (pos > 0) {

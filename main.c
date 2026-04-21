@@ -66,6 +66,8 @@ static char sccsid[] = "@(#)main.c	8.6 (Berkeley) 5/28/95";
 #include "trap.h"
 #include "var.h"
 #include "show.h"
+
+void initpwd __P((void));
 #include "memalloc.h"
 #include "error.h"
 #include "init.h"
@@ -151,6 +153,7 @@ main(argc, argv)
 	rootpid = getpid();
 	rootshell = 1;
 	init();
+	initpwd();
 	setstackmark(&smark);
 	procargs(argc, argv);
 	if (argv[0] && argv[0][0] == '-') {

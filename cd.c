@@ -66,6 +66,11 @@ STATIC char *getcomponent __P((void));
 STATIC void updatepwd __P((char *));
 STATIC void getpwd __P((void));
 
+void
+initpwd() {
+	getpwd();
+}
+
 char *curdir;			/* current working directory */
 char *prevdir;			/* previous working directory */
 STATIC char *cdcomppath;

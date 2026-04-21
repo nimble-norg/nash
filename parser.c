@@ -39,6 +39,12 @@ static char sccsid[] = "@(#)parser.c	8.7 (Berkeley) 5/16/95";
 #endif /* not lint */
 
 #include <stdlib.h>
+#include <time.h>
+#include <unistd.h>
+#include <pwd.h>
+#include <sys/utsname.h>
+
+extern char *curdir;
 
 #include "shell.h"
 #include "parser.h"
@@ -1987,14 +1993,146 @@ char *
 getprompt(unused)
 	void *unused;
 	{
+	static char promptbuf[512];
+	static char cached_user[64];
+	static char cached_host[64];
+	static int  cached_uid = -1;
+	static int  cache_done = 0;
+	const char *tmpl;
+	char *out;
+	char *end;
+	const char *p;
+	time_t now;
+	struct tm *tm;
+	char timebuf[32];
+	const char *pwd;
+	const char *home;
+	int homelen;
+
 	switch (whichprompt) {
-	case 0:
-		return "";
-	case 1:
-		return ps1val();
-	case 2:
-		return ps2val();
-	default:
-		return "<internal prompt error>";
+	case 0:  return "";
+	case 1:  tmpl = ps1val(); break;
+	case 2:  return ps2val();
+	default: return "<internal prompt error>";
 	}
+
+	if (!cache_done) {
+		struct passwd *pw;
+		struct utsname uts;
+		uid_t uid = geteuid();
+		cached_uid = (int)uid;
+		pw = getpwuid(uid);
+		if (pw && pw->pw_name && pw->pw_name[0])
+			strncpy(cached_user, pw->pw_name, sizeof cached_user - 1);
+		else
+			snprintf(cached_user, sizeof cached_user, "uid:%d", (int)uid);
+		cached_user[sizeof cached_user - 1] = '\0';
+		if (uname(&uts) == 0)
+			strncpy(cached_host, uts.nodename, sizeof cached_host - 1);
+		else
+			strncpy(cached_host, "localhost", sizeof cached_host - 1);
+		cached_host[sizeof cached_host - 1] = '\0';
+		cache_done = 1;
+	}
+
+	out = promptbuf;
+	end = promptbuf + sizeof promptbuf - 1;
+	now = time(NULL);
+	tm  = localtime(&now);
+	pwd  = curdir ? curdir : "";
+	home = lookupvar("HOME");
+	homelen = home ? (int)strlen(home) : 0;
+
+	for (p = tmpl; *p && out < end; p++) {
+		if (*p != '\\') { *out++ = *p; continue; }
+		p++;
+		if (!*p) break;
+		switch (*p) {
+		case 'u':
+			{ int n = (int)strlen(cached_user); if (out+n < end) { memcpy(out, cached_user, n); out += n; } }
+			break;
+		case 'h':
+			{ int n = (int)strlen(cached_host); if (out+n < end) { memcpy(out, cached_host, n); out += n; } }
+			break;
+		case 'w': {
+			const char *show = pwd;
+			int slen;
+			if (homelen > 0 && strncmp(pwd, home, (size_t)homelen) == 0
+			    && (pwd[homelen] == '/' || pwd[homelen] == '\0')) {
+				if (out < end) *out++ = '~';
+				show = pwd + homelen;
+			}
+			slen = (int)strlen(show);
+			if (out + slen < end) { memcpy(out, show, slen); out += slen; }
+			break;
+		}
+		case 'W': {
+			const char *base;
+			int slen;
+			if (homelen > 0 && strcmp(pwd, home) == 0) {
+				if (out < end) *out++ = '~';
+				break;
+			}
+			base = strrchr(pwd, '/');
+			base = base ? base + 1 : pwd;
+			if (!*base) base = "/";
+			slen = (int)strlen(base);
+			if (out + slen < end) { memcpy(out, base, slen); out += slen; }
+			break;
+		}
+		case '$':
+			if (out < end) *out++ = (cached_uid == 0) ? '#' : '@';
+			break;
+		case 'T':
+			if (tm) {
+				strftime(timebuf, sizeof timebuf, "%I:%M:%S", tm);
+				{ int n = (int)strlen(timebuf); if (out+n < end) { memcpy(out, timebuf, n); out += n; } }
+			}
+			break;
+		case '@':
+			if (tm) {
+				strftime(timebuf, sizeof timebuf, "%I:%M %p", tm);
+				{ int n = (int)strlen(timebuf); if (out+n < end) { memcpy(out, timebuf, n); out += n; } }
+			}
+			break;
+		case 't':
+			if (tm) {
+				strftime(timebuf, sizeof timebuf, "%H:%M:%S", tm);
+				{ int n = (int)strlen(timebuf); if (out+n < end) { memcpy(out, timebuf, n); out += n; } }
+			}
+			break;
+		case 'd':
+			if (tm) {
+				strftime(timebuf, sizeof timebuf, "%a %b %e", tm);
+				{ int n = (int)strlen(timebuf); if (out+n < end) { memcpy(out, timebuf, n); out += n; } }
+			}
+			break;
+		case '0': case '1': case '2': case '3':
+		case '4': case '5': case '6': case '7': {
+			unsigned int val = (unsigned int)(*p - '0');
+			if (p[1] >= '0' && p[1] <= '7') { p++; val = val*8 + (unsigned int)(*p-'0'); }
+			if (p[1] >= '0' && p[1] <= '7') { p++; val = val*8 + (unsigned int)(*p-'0'); }
+			if (out < end) *out++ = (char)val;
+			break;
+		}
+		case 'e':
+			if (out < end) *out++ = '\033';
+			break;
+		case 'n':
+			if (out < end) *out++ = '\n';
+			break;
+		case 'r':
+			if (out < end) *out++ = '\r';
+			break;
+		case '\\':
+			if (out < end) *out++ = '\\';
+			break;
+		default:
+			if (out < end) *out++ = '\\';
+			if (out < end) *out++ = *p;
+			break;
+		}
+	}
+	*out = '\0';
+	return promptbuf;
 }

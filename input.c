@@ -197,6 +197,7 @@ retry:
 		const char *rl_cp;
 		int len;
 
+		lineread_set_allow_complete(whichprompt == 1 ? 1 : 0);
 		rl_cp = lineread(whichprompt == 1 ? getprompt(NULL) : getprompt(NULL));
 		if (rl_cp == NULL) {
 			i = 0;
@@ -308,6 +309,7 @@ retry:
 				p[len]     = '\n';
 				p[len + 1] = '\0';
 				i = len + 1;
+				lineread_hist_pop();
 				lineread_hist_push(he_buf);
 			} else {
 				strncpy(p, src, BUFSIZ - 2);
