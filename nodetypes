@@ -154,3 +154,7 @@ NDBRACKETB ndbracketb		# [[ lhs binary-op rhs ]] compound test
 	op	int			# binary test operator (DBOP_* constant)
 	lhs	nodeptr			# left-hand side word (NARG node)
 	rhs	nodeptr			# right-hand side word (NARG node)
+
+NARITH narith			# (( arithmetic expression )) compound command
+	type	int
+	text	string			# the arithmetic expression text

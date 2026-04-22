@@ -457,15 +457,51 @@ TRACE(("expecting DO got %s %s\n", tokname[got], got == TWORD ? wordtext : ""));
 		*cpp = NULL;
 		checkkwd = 1;
 		break;
-	case TLP:
-		n1 = (union node *)stalloc(sizeof (struct nredir));
-		n1->type = NSUBSHELL;
-		n1->nredir.n = list(0);
-		n1->nredir.redirect = NULL;
-		if (readtoken() != TRP)
-			synexpect(TRP);
-		checkkwd = 1;
+	case TLP: {
+		int nc2 = pgetc();
+		if (nc2 == '(') {
+			char abuf[4096];
+			int alen = 0;
+			int depth = 1;
+			int ac;
+			while ((ac = pgetc()) != PEOF) {
+				if (ac == '(') {
+					depth++;
+					if (alen < 4095) abuf[alen++] = ac;
+				} else if (ac == ')') {
+					depth--;
+					if (depth == 0) {
+						int nc3 = pgetc();
+						if (nc3 != ')') {
+							pungetc();
+							if (alen < 4095) abuf[alen++] = ')';
+						} else {
+							break;
+						}
+					} else {
+						if (alen < 4095) abuf[alen++] = ac;
+					}
+				} else {
+					if (alen < 4095) abuf[alen++] = ac;
+				}
+			}
+			abuf[alen] = '\0';
+			n1 = (union node *)stalloc(sizeof (struct narith));
+			n1->type = NARITH;
+			n1->narith.text = savestr(abuf);
+			checkkwd = 1;
+		} else {
+			pungetc();
+			n1 = (union node *)stalloc(sizeof (struct nredir));
+			n1->type = NSUBSHELL;
+			n1->nredir.n = list(0);
+			n1->nredir.redirect = NULL;
+			if (readtoken() != TRP)
+				synexpect(TRP);
+			checkkwd = 1;
+		}
 		break;
+	}
 	case TBEGIN:
 		n1 = list(0);
 		if (readtoken() != TEND)

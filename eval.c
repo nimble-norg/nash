@@ -68,6 +68,7 @@ static char sccsid[] = "@(#)eval.c	8.9 (Berkeley) 6/8/95";
 #include "error.h"
 #include "show.h"
 #include "mystring.h"
+#include "arith.h"
 #include "myhistedit.h"
 
 
@@ -102,6 +103,7 @@ STATIC void evalpipe __P((union node *));
 STATIC void evalcommand __P((union node *, int, struct backcmd *));
 STATIC void evaldbracket __P((union node *));
 STATIC void evaldbracketb __P((union node *));
+STATIC void evalnarith __P((union node *));
 STATIC void prehash __P((union node *));
 
 
@@ -266,6 +268,9 @@ evaltree(n, flags)
 		break;
 	case NDBRACKETB:
 		evaldbracketb(n);
+		break;
+	case NARITH:
+		evalnarith(n);
 		break;
 	case NPIPE:
 		evalpipe(n);
@@ -625,6 +630,16 @@ evaldbracket(n)
 	default:     result = 0; break;
 	}
 	exitstatus = result ? 0 : 1;
+}
+
+
+STATIC void
+evalnarith(n)
+	union node *n;
+{
+	long val;
+	val = arith(n->narith.text);
+	exitstatus = (val != 0) ? 0 : 1;
 }
 
 

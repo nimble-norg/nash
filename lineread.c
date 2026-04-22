@@ -359,7 +359,7 @@ static void lr_cands_free(char **cands, int ncands)
 
 static int lr_complete_command(const char *word, int wlen,
                                 char *common, int *clen,
-                                char **cands, int *ncands)
+                                char ***cands, int *cap, int *ncands)
 {
     char *path_env, *path_copy, *dir, *save;
     char  fullpath[PATH_MAX];
@@ -410,9 +410,15 @@ static int lr_complete_command(const char *word, int wlen,
             lr_extend_common(common, clen, de->d_name, first);
             first = 0; found++;
 
-            if (*ncands < LR_MAX_CANDS) {
+            if (*ncands == *cap) {
+                int nc = *cap * 2;
+                char **np = realloc(*cands, (size_t)nc * sizeof(char *));
+                if (!np) continue;
+                *cands = np; *cap = nc;
+            }
+            {
                 char *disp = malloc(strlen(fullpath) + 1);
-                if (disp) { strcpy(disp, fullpath); cands[(*ncands)++] = disp; }
+                if (disp) { strcpy(disp, fullpath); (*cands)[(*ncands)++] = disp; }
             }
         }
         closedir(d);
@@ -423,14 +429,14 @@ static int lr_complete_command(const char *word, int wlen,
         for (i = 0; i < nseen; i++) free(seen[i]);
         free(seen);
     }
-    if (*ncands > 1) qsort(cands, (size_t)*ncands, sizeof(char *), lr_cand_cmp);
+    if (*ncands > 1) qsort(*cands, (size_t)*ncands, sizeof(char *), lr_cand_cmp);
     return found;
 }
 
 
 static int lr_complete_path(const char *word, int wlen,
                              char *common, int *clen,
-                             char **cands, int *ncands)
+                             char ***cands, int *cap, int *ncands)
 {
     char         dirpart[PATH_MAX], fullpath[PATH_MAX], candidate[PATH_MAX];
     const char  *prefix, *slash;
@@ -474,13 +480,19 @@ static int lr_complete_path(const char *word, int wlen,
         lr_extend_common(common, clen, candidate, first);
         first = 0; found++;
 
-        if (*ncands < LR_MAX_CANDS) {
+        if (*ncands == *cap) {
+            int nc = *cap * 2;
+            char **np = realloc(*cands, (size_t)nc * sizeof(char *));
+            if (!np) continue;
+            *cands = np; *cap = nc;
+        }
+        {
             char *disp = malloc(strlen(candidate) + 1);
-            if (disp) { strcpy(disp, candidate); cands[(*ncands)++] = disp; }
+            if (disp) { strcpy(disp, candidate); (*cands)[(*ncands)++] = disp; }
         }
     }
     closedir(d);
-    if (*ncands > 1) qsort(cands, (size_t)*ncands, sizeof(char *), lr_cand_cmp);
+    if (*ncands > 1) qsort(*cands, (size_t)*ncands, sizeof(char *), lr_cand_cmp);
     return found;
 }
 
@@ -489,32 +501,46 @@ static void lr_complete(char *buf, int *lenp, int *posp, const char *prompt)
     int  len = *lenp, pos = *posp;
     int  wstart, wlen, at_first, clen = 0, found, i;
     char common[PATH_MAX], word[LBUF];
-    char *cands[LR_MAX_CANDS];
-    int   ncands = 0;
+    char **cands;
+    int   cap = 256, ncands = 0;
 
-    
+    cands = malloc((size_t)cap * sizeof(char *));
+    if (!cands) { lr_bell(); return; }
+
     wstart = pos;
-    while (wstart > 0 && buf[wstart-1] != ' ' && buf[wstart-1] != '\t') wstart--;
+    while (wstart > 0) {
+        char pc = buf[wstart - 1];
+        if (pc == ' ' || pc == '\t' ||
+            pc == ';' || pc == '|'  || pc == '&')
+            break;
+        wstart--;
+    }
     wlen = pos - wstart;
 
     at_first = 1;
-    for (i = 0; i < wstart; i++)
-        if (buf[i] != ' ' && buf[i] != '\t') { at_first = 0; break; }
+    for (i = wstart - 1; i >= 0; i--) {
+        char c = buf[i];
+        if (c == ' ' || c == '\t') continue;
+        if (c == ';' || c == '&' || c == '|') { at_first = 1; break; }
+        at_first = 0;
+        break;
+    }
 
-    if (wlen >= LBUF) return;
+    if (wlen >= LBUF) { free(cands); return; }
     strncpy(word, buf + wstart, (size_t)wlen); word[wlen] = '\0';
 
     if (at_first && strchr(word, '/') == NULL)
-        found = lr_complete_command(word, wlen, common, &clen, cands, &ncands);
+        found = lr_complete_command(word, wlen, common, &clen, &cands, &cap, &ncands);
     else
-        found = lr_complete_path(word, wlen, common, &clen, cands, &ncands);
+        found = lr_complete_path(word, wlen, common, &clen, &cands, &cap, &ncands);
 
-    if (found == 0) { lr_bell(); return; }
+    found = ncands;
 
-    
+    if (found == 0) { lr_bell(); free(cands); return; }
+
     if (clen > wlen) {
         int newlen = len - wlen + clen;
-        if (newlen >= LBUF) { lr_cands_free(cands, ncands); lr_bell(); return; }
+        if (newlen >= LBUF) { lr_cands_free(cands, ncands); free(cands); lr_bell(); return; }
         memmove(buf + wstart + clen, buf + pos, (size_t)(len - pos + 1));
         memcpy(buf + wstart, common, (size_t)clen);
         len = newlen;
@@ -524,7 +550,6 @@ static void lr_complete(char *buf, int *lenp, int *posp, const char *prompt)
         lr_refresh(prompt, buf, len, pos);
     }
 
-    
     if (found == 1) {
         if (pos > 0 && buf[pos-1] != '/' && len < LBUF-1) {
             memmove(buf+pos+1, buf+pos, (size_t)(len-pos));
@@ -532,13 +557,12 @@ static void lr_complete(char *buf, int *lenp, int *posp, const char *prompt)
             *lenp = len; *posp = pos;
             lr_refresh(prompt, buf, len, pos);
         }
-        lr_cands_free(cands, ncands);
+        lr_cands_free(cands, ncands); free(cands);
         return;
     }
 
-    
     lr_show_list(prompt, buf, len, pos, cands, ncands);
-    lr_cands_free(cands, ncands);
+    lr_cands_free(cands, ncands); free(cands);
     *lenp = len; *posp = pos;
 }
 
