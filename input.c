@@ -243,8 +243,47 @@ retry:
 					const char *entry = NULL;
 					const char *after = NULL;
 					const char *sp = src + si + 1;
+					static char he_wdtmp[BUFSIZ];
+					char he_wdsel[64];
+					int  he_have_wdsel = 0;
 
-					if (sp[0] == '!') {
+					if (sp[0] == '#') {
+						/* !# expands to the current typed line so far */
+						he_buf[di] = '\0';
+						if (di + di < BUFSIZ - 2) {
+							memmove(he_buf + di, he_buf, (size_t)di);
+							di += di;
+						}
+						si = (int)(sp + 1 - src);
+						expanded = 1;
+						continue;
+					} else if (sp[0] == '?') {
+						/* !?string? — substring search in any position */
+						const char *qstart = sp + 1;
+						const char *qend = strchr(qstart, '?');
+						char needle[256];
+						int nl;
+						if (qend == NULL) {
+							qend = qstart + strlen(qstart);
+							after = qend;
+						} else {
+							after = qend + 1;
+						}
+						nl = (int)(qend - qstart);
+						if (nl >= (int)sizeof needle) nl = (int)sizeof needle - 1;
+						memcpy(needle, qstart, (size_t)nl);
+						needle[nl] = '\0';
+						if (nl > 0) {
+							int j;
+							for (j = hlen - 1; j >= 0; j--) {
+								const char *h = lineread_hist_entry(j);
+								if (h && strstr(h, needle)) {
+									entry = h;
+									break;
+								}
+							}
+						}
+					} else if (sp[0] == '!') {
 						if (hlen > 0)
 							entry = lineread_hist_entry(hlen - 1);
 						after = sp + 1;
@@ -254,7 +293,7 @@ retry:
 						after = sp;
 						if (idx >= 0 && idx < hlen)
 							entry = lineread_hist_entry(idx);
-					} else if (sp[0] == '-' && sp[1] >= '0' && sp[1] <= '9') {
+					} else if (sp[0] == '-' && sp[1] >= '1' && sp[1] <= '9') {
 						int rel = atoi(sp + 1);
 						int idx = hlen - rel;
 						sp++;
@@ -262,12 +301,19 @@ retry:
 						after = sp;
 						if (idx >= 0 && idx < hlen)
 							entry = lineread_hist_entry(idx);
+					} else if (sp[0] == '$' || sp[0] == '*' || sp[0] == '^') {
+						/* !$  !*  !^  — word designator from prev cmd */
+						if (hlen > 0)
+							entry = lineread_hist_entry(hlen - 1);
+						he_wdsel[0] = sp[0]; he_wdsel[1] = '\0';
+						he_have_wdsel = 1;
+						after = sp + 1;
 					} else {
 						const char *ep = sp;
 						int nlen;
 						while (*ep && *ep != ' ' && *ep != '\t'
 						       && *ep != ';' && *ep != '|'
-						       && *ep != '&') ep++;
+						       && *ep != '&' && *ep != ':') ep++;
 						nlen = (int)(ep - sp);
 						after = ep;
 						if (nlen > 0) {
@@ -281,6 +327,75 @@ retry:
 								}
 							}
 						}
+					}
+
+					/* word designator after ':' (e.g. !!:2 !!:1-3 !!:$ !!:^ !!:*) */
+					if (entry && !he_have_wdsel && after && after[0] == ':') {
+						const char *wd = after + 1;
+						int wdlen = 0;
+						while (wd[wdlen] && wd[wdlen] != ' '
+						       && wd[wdlen] != '\t'
+						       && wd[wdlen] != ';'
+						       && wd[wdlen] != '|'
+						       && wd[wdlen] != '&') wdlen++;
+						if (wdlen > 0 && wdlen < (int)sizeof he_wdsel - 1) {
+							memcpy(he_wdsel, wd, (size_t)wdlen);
+							he_wdsel[wdlen] = '\0';
+							he_have_wdsel = 1;
+							after = wd + wdlen;
+						}
+					}
+
+					/* apply word designator */
+					if (entry && he_have_wdsel) {
+						char he_ecopy[BUFSIZ];
+						char *he_words[256];
+						int  he_nwords = 0;
+						char *he_wp;
+						strncpy(he_ecopy, entry, sizeof he_ecopy - 1);
+						he_ecopy[sizeof he_ecopy - 1] = '\0';
+						he_wp = he_ecopy;
+						while (*he_wp && he_nwords < 255) {
+							while (*he_wp == ' ' || *he_wp == '\t') he_wp++;
+							if (!*he_wp) break;
+							he_words[he_nwords++] = he_wp;
+							while (*he_wp && *he_wp != ' ' && *he_wp != '\t') he_wp++;
+							if (*he_wp) *he_wp++ = '\0';
+						}
+						he_wdtmp[0] = '\0';
+						if (he_wdsel[0] == '$') {
+							if (he_nwords > 1)
+								strncat(he_wdtmp, he_words[he_nwords-1], sizeof he_wdtmp - 1);
+							else if (he_nwords == 1)
+								strncat(he_wdtmp, he_words[0], sizeof he_wdtmp - 1);
+						} else if (he_wdsel[0] == '^') {
+							if (he_nwords > 1)
+								strncat(he_wdtmp, he_words[1], sizeof he_wdtmp - 1);
+							else if (he_nwords == 1)
+								strncat(he_wdtmp, he_words[0], sizeof he_wdtmp - 1);
+						} else if (he_wdsel[0] == '*') {
+							int he_wi;
+							int he_start = he_nwords > 1 ? 1 : 0;
+							for (he_wi = he_start; he_wi < he_nwords; he_wi++) {
+								if (he_wi > he_start)
+									strncat(he_wdtmp, " ", sizeof he_wdtmp - 1);
+								strncat(he_wdtmp, he_words[he_wi], sizeof he_wdtmp - 1);
+							}
+						} else {
+							/* numeric: n  or  m-n */
+							int he_m, he_n, he_wi;
+							char *he_dash = strchr(he_wdsel, '-');
+							he_m = atoi(he_wdsel);
+							he_n = he_dash ? atoi(he_dash + 1) : he_m;
+							if (he_m < 0) he_m = 0;
+							if (he_n >= he_nwords) he_n = he_nwords - 1;
+							for (he_wi = he_m; he_wi <= he_n && he_wi < he_nwords; he_wi++) {
+								if (he_wi > he_m)
+									strncat(he_wdtmp, " ", sizeof he_wdtmp - 1);
+								strncat(he_wdtmp, he_words[he_wi], sizeof he_wdtmp - 1);
+							}
+						}
+						entry = he_wdtmp;
 					}
 
 					if (entry && after) {

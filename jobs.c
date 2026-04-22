@@ -687,6 +687,54 @@ waitforjob(jp)
 
 
 
+int
+waitforjob_pipefail(jp)
+	register struct job *jp;
+	{
+#if JOBS
+	int mypgrp = getpgrp();
+#endif
+	int i, status, st, worst;
+
+	worst = 0;
+	INTOFF;
+	TRACE(("waitforjob_pipefail(%%%d) called\n", jp - jobtab + 1));
+	while (jp->state == 0) {
+		dowait(1, jp);
+	}
+#if JOBS
+	if (jp->jobctl) {
+		if (tcsetpgrp(2, mypgrp) < 0)
+			error("TIOCSPGRP failed, errno=%d\n", errno);
+	}
+	if (jp->state == JOBSTOPPED)
+		curjob = jp - jobtab + 1;
+#endif
+	for (i = 0; i < jp->nprocs; i++) {
+		status = jp->ps[i].status;
+		if ((status & 0xFF) == 0)
+			st = status >> 8 & 0xFF;
+#if JOBS
+		else if ((status & 0xFF) == 0177)
+			st = (status >> 8 & 0x7F) + 128;
+#endif
+		else
+			st = (status & 0x7F) + 128;
+		if (st != 0)
+			worst = st;
+	}
+	status = jp->ps[jp->nprocs - 1].status;
+	if (! JOBS || jp->state == JOBDONE)
+		freejob(jp);
+	CLEAR_PENDING_INT;
+	if ((status & 0x7F) == SIGINT)
+		kill(getpid(), SIGINT);
+	INTON;
+	return worst;
+}
+
+
+
 /*
  * Wait for a process to terminate.
  */

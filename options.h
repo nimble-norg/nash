@@ -61,8 +61,9 @@ struct shparam {
 #define	aflag optlist[12].val
 #define	bflag optlist[13].val
 #define	uflag optlist[14].val
+#define	pflag optlist[15].val
 
-#define NOPTS	15
+#define NOPTS	16
 
 struct optent {
 	const char *name;
@@ -87,6 +88,7 @@ struct optent optlist[NOPTS] = {
 	{ "allexport",	'a',	0 },
 	{ "notify",	'b',	0 },
 	{ "nounset",	'u',	0 },
+	{ "pipefail",	'p',	0 },
 };
 #else
 extern struct optent optlist[NOPTS];

@@ -87,6 +87,7 @@ int jobidcmd __P((int, char **));
 struct job *makejob __P((union node *, int));
 int forkshell __P((struct job *, union node *, int));
 int waitforjob __P((struct job *));
+int waitforjob_pipefail __P((struct job *));
 int stoppedjobs __P((void));
 char *commandtext __P((union node *));
 

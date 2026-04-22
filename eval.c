@@ -520,7 +520,7 @@ evalpipe(n)
 	INTON;
 	if (n->npipe.backgnd == 0) {
 		INTOFF;
-		exitstatus = waitforjob(jp);
+		exitstatus = pflag ? waitforjob_pipefail(jp) : waitforjob(jp);
 		TRACE(("evalpipe:  job done exit status %d\n", exitstatus));
 		INTON;
 	}
