@@ -357,6 +357,9 @@ static void lr_cands_free(char **cands, int ncands)
     for (i = 0; i < ncands; i++) free(cands[i]);
 }
 
+static int lr_needs_escape(char ch);
+static char *lr_escape_candidate(char *dst, int dsz, const char *src);
+
 static int lr_complete_command(const char *word, int wlen,
                                 char *common, int *clen,
                                 char ***cands, int *cap, int *ncands)
@@ -474,9 +477,22 @@ static int lr_complete_path(const char *word, int wlen,
         isdir = (stat(fullpath, &st) == 0 && S_ISDIR(st.st_mode));
 
         
-        snprintf(candidate, sizeof candidate, "%s%s%s",
-                 dirpart, de->d_name, isdir ? "/" : "");
-
+        {
+            char raw_cand[PATH_MAX];
+            char esc_cand[PATH_MAX*2];
+            snprintf(raw_cand, sizeof raw_cand, "%s%s%s",
+                     dirpart, de->d_name, isdir ? "/" : "");
+            if (!isdir) {
+                char esc_name[NAME_MAX*2+2];
+                lr_escape_candidate(esc_name, sizeof esc_name, de->d_name);
+                snprintf(esc_cand, sizeof esc_cand, "%s%s",
+                         dirpart, esc_name);
+            } else {
+                snprintf(esc_cand, sizeof esc_cand, "%s", raw_cand);
+            }
+            strncpy(candidate, esc_cand, sizeof candidate - 1);
+            candidate[sizeof candidate - 1] = '\0';
+        }
         lr_extend_common(common, clen, candidate, first);
         first = 0; found++;
 
@@ -496,6 +512,104 @@ static int lr_complete_path(const char *word, int wlen,
     return found;
 }
 
+
+/* Return 1 if ch needs backslash-escaping in an unquoted word. */
+static int lr_needs_escape(char ch)
+{
+    return (ch == ' '  || ch == '\t' || ch == '\n' ||
+            ch == '\'' || ch == '"'  || ch == '\\' ||
+            ch == '|'  || ch == '&'  || ch == ';'  ||
+            ch == '('  || ch == ')'  || ch == '{'  || ch == '}' ||
+            ch == '<'  || ch == '>'  || ch == '!'  || ch == '$' ||
+            ch == '`'  || ch == '*'  || ch == '?'  || ch == '[' ||
+            ch == '#'  || ch == '~');
+}
+
+/* Write escaped form of src into dst (size dsz).  Returns dst. */
+static char *lr_escape_candidate(char *dst, int dsz, const char *src)
+{
+    int di = 0;
+    int i;
+    for (i = 0; src[i] && di < dsz - 2; i++) {
+        if (lr_needs_escape((unsigned char)src[i]))
+            dst[di++] = '\\';
+        dst[di++] = src[i];
+    }
+    dst[di] = '\0';
+    return dst;
+}
+
+/* Complete variable names from the environment and shell-special vars. */
+static int lr_complete_vars(const char *prefix, int plen,
+                             char *common, int *clen,
+                             char ***cands, int *cap, int *ncands)
+{
+    extern char **environ;
+    static const char *special[] = {
+        "HOME","PATH","PWD","OLDPWD","IFS","PS1","PS2",
+        "HISTFILE","HISTSIZE","TERM","SHELL","USER","LOGNAME",
+        "HOSTNAME","RANDOM","LINENO","PPID","?","$","!","0",NULL
+    };
+    int found = 0, first = 1, i;
+    char **ep;
+    char varbuf[256];
+
+    *clen = 0; common[0] = '\0'; *ncands = 0;
+
+    /* scan environment */
+    for (ep = environ; ep && *ep; ep++) {
+        const char *eq = strchr(*ep, '=');
+        int nlen;
+        if (!eq) continue;
+        nlen = (int)(eq - *ep);
+        if (plen > 0 && (nlen < plen || strncmp(*ep, prefix, (size_t)plen) != 0))
+            continue;
+        if (nlen >= (int)sizeof varbuf - 2) continue;
+        varbuf[0] = '$';
+        memcpy(varbuf + 1, *ep, (size_t)nlen);
+        varbuf[nlen + 1] = '\0';
+        lr_extend_common(common, clen, varbuf, first);
+        first = 0; found++;
+        if (*ncands == *cap) {
+            int nc = *cap * 2;
+            char **np = realloc(*cands, (size_t)nc * sizeof(char *));
+            if (!np) continue;
+            *cands = np; *cap = nc;
+        }
+        { char *d = malloc(strlen(varbuf)+1);
+          if (d) { strcpy(d, varbuf); (*cands)[(*ncands)++] = d; } }
+    }
+
+    /* scan special vars */
+    for (i = 0; special[i]; i++) {
+        int nlen = (int)strlen(special[i]);
+        char sbuf[64];
+        if (plen > 0 && strncmp(special[i], prefix, (size_t)plen) != 0) continue;
+        sbuf[0] = '$';
+        memcpy(sbuf + 1, special[i], (size_t)nlen + 1);
+        /* skip if already in list from environ */
+        {
+            int j, dup = 0;
+            for (j = 0; j < *ncands; j++)
+                if (strcmp((*cands)[j], sbuf) == 0) { dup = 1; break; }
+            if (dup) continue;
+        }
+        lr_extend_common(common, clen, sbuf, first);
+        first = 0; found++;
+        if (*ncands == *cap) {
+            int nc = *cap * 2;
+            char **np = realloc(*cands, (size_t)nc * sizeof(char *));
+            if (!np) continue;
+            *cands = np; *cap = nc;
+        }
+        { char *d = malloc(strlen(sbuf)+1);
+          if (d) { strcpy(d, sbuf); (*cands)[(*ncands)++] = d; } }
+    }
+
+    if (*ncands > 1) qsort(*cands, (size_t)*ncands, sizeof(char *), lr_cand_cmp);
+    return found;
+}
+
 static void lr_complete(char *buf, int *lenp, int *posp, const char *prompt)
 {
     int  len = *lenp, pos = *posp;
@@ -503,27 +617,147 @@ static void lr_complete(char *buf, int *lenp, int *posp, const char *prompt)
     char common[PATH_MAX], word[LBUF];
     char **cands;
     int   cap = 256, ncands = 0;
+    int   in_dquote = 0;
+    int   do_var = 0;
+    int   var_prefix_start = 0;
 
     cands = malloc((size_t)cap * sizeof(char *));
     if (!cands) { lr_bell(); return; }
 
+    /* ── scan for double-quote context ── */
+    {
+        int qi;
+        for (qi = 0; qi < pos; qi++) {
+            if (buf[qi] == '\'' && !in_dquote) {
+                while (qi < pos - 1 && buf[qi+1] != '\'') qi++;
+                continue;
+            }
+            if (buf[qi] == '"') in_dquote = !in_dquote;
+        }
+    }
+
+    /* ── check for variable completion: $ immediately before cursor ── */
+    if (pos > 0 && buf[pos-1] == '$') {
+        do_var = 1;
+        var_prefix_start = pos;    /* prefix is empty (right after $) */
+    } else if (pos > 1 && buf[pos-1] != ' ' && buf[pos-1] != '\t') {
+        /* scan back to find $ without a space between it and cursor */
+        int vi = pos - 1;
+        while (vi > 0 && buf[vi] != '$' && buf[vi] != ' ' && buf[vi] != '\t'
+               && buf[vi] != '/' && buf[vi] != '"'
+               && buf[vi] != '(' && buf[vi] != ')' && buf[vi] != '{'
+               && buf[vi] != ';' && buf[vi] != '|'  && buf[vi] != '&') vi--;
+        if (buf[vi] == '$' && (vi + 1 >= pos || buf[vi + 1] != '(')) {
+            /* only treat as var completion if not inside single quotes */
+            if (!in_dquote) {
+                /* check not in single-quote context by recounting */
+                int sq = 0, qi2;
+                for (qi2 = 0; qi2 < vi; qi2++)
+                    if (buf[qi2] == '\'') sq++;
+                if ((sq % 2) == 0) { /* even = not inside single quotes */
+                    do_var = 1;
+                    var_prefix_start = vi + 1;
+                }
+            } else {
+                do_var = 1;
+                var_prefix_start = vi + 1;
+            }
+        }
+    }
+
+    if (do_var) {
+        /* variable prefix is buf[var_prefix_start..pos-1] */
+        int plen = pos - var_prefix_start;
+        char vprefix[256];
+        if (plen < (int)sizeof vprefix) {
+            memcpy(vprefix, buf + var_prefix_start, (size_t)plen);
+            vprefix[plen] = '\0';
+            found = lr_complete_vars(vprefix, plen, common, &clen,
+                                     &cands, &cap, &ncands);
+            found = ncands;
+            if (found == 0) { lr_bell(); free(cands); return; }
+            /* wstart for insertion: includes the $ sign */
+            wstart = var_prefix_start - 1;   /* the $ position */
+            wlen   = pos - wstart;
+            if (clen > wlen) {
+                int newlen = len - wlen + clen;
+                if (newlen < LBUF) {
+                    memmove(buf + wstart + clen, buf + pos,
+                            (size_t)(len - pos + 1));
+                    memcpy(buf + wstart, common, (size_t)clen);
+                    len = newlen; pos = wstart + clen;
+                    buf[len] = '\0';
+                    *lenp = len; *posp = pos;
+                    lr_refresh(prompt, buf, len, pos);
+                }
+            }
+            if (found == 1) {
+                if (len < LBUF-1) {
+                    memmove(buf+pos+1, buf+pos, (size_t)(len-pos));
+                    buf[pos] = ' '; len++; pos++; buf[len] = '\0';
+                    *lenp = len; *posp = pos;
+                    lr_refresh(prompt, buf, len, pos);
+                }
+                lr_cands_free(cands, ncands); free(cands);
+                return;
+            }
+            lr_show_list(prompt, buf, len, pos, cands, ncands);
+            lr_cands_free(cands, ncands); free(cands);
+            *lenp = len; *posp = pos;
+            return;
+        }
+        free(cands);
+        return;
+    }
+
+    /* ── determine wstart (stop at operators AND opening brackets) ── */
     wstart = pos;
     while (wstart > 0) {
         char pc = buf[wstart - 1];
         if (pc == ' ' || pc == '\t' ||
-            pc == ';' || pc == '|'  || pc == '&')
+            pc == ';' || pc == '|'  || pc == '&' ||
+            pc == '(' || pc == '{')
             break;
         wstart--;
     }
     wlen = pos - wstart;
 
+    /* ── determine at_first scanning backwards ── */
     at_first = 1;
-    for (i = wstart - 1; i >= 0; i--) {
-        char c = buf[i];
-        if (c == ' ' || c == '\t') continue;
-        if (c == ';' || c == '&' || c == '|') { at_first = 1; break; }
-        at_first = 0;
-        break;
+    {
+        /* scan full buffer up to pos to detect open $(), (), {} */
+        int depth_paren = 0, depth_brace = 0;
+        for (i = 0; i < pos - wlen; i++) {
+            char c = buf[i];
+            if (c == '$' && i + 1 < pos && buf[i+1] == '(') {
+                depth_paren++; i++; continue;
+            }
+            if (c == '(' && (i == 0 || buf[i-1] != '$')) {
+                depth_paren++; continue;
+            }
+            if (c == ')') { if (depth_paren > 0) depth_paren--; continue; }
+            if (c == '{') { depth_brace++; continue; }
+            if (c == '}') { if (depth_brace > 0) depth_brace--; continue; }
+        }
+        if (depth_paren > 0 || depth_brace > 0) {
+            /* inside a command-executing block: scan back from wstart */
+            for (i = wstart - 1; i >= 0; i--) {
+                char c = buf[i];
+                if (c == ' ' || c == '\t') continue;
+                if (c == ';' || c == '&' || c == '|' ||
+                    c == '(' || c == '{') { at_first = 1; break; }
+                at_first = 0;
+                break;
+            }
+        } else {
+            for (i = wstart - 1; i >= 0; i--) {
+                char c = buf[i];
+                if (c == ' ' || c == '\t') continue;
+                if (c == ';' || c == '&' || c == '|') { at_first = 1; break; }
+                at_first = 0;
+                break;
+            }
+        }
     }
 
     if (wlen >= LBUF) { free(cands); return; }
