@@ -39,6 +39,7 @@ static char sccsid[] = "@(#)eval.c	8.9 (Berkeley) 6/8/95";
 #endif /* not lint */
 
 #include <signal.h>
+#include <stdio.h>
 #include <regex.h>
 #include <stdlib.h>
 #include <sys/stat.h>
@@ -96,6 +97,7 @@ int oexitstatus;		/* saved exit status */
 
 STATIC void evalloop __P((union node *));
 STATIC void evalfor __P((union node *));
+STATIC void evalselect __P((union node *));
 STATIC void evalcase __P((union node *, int));
 STATIC void evalsubshell __P((union node *, int));
 STATIC void expredir __P((union node *));
@@ -252,6 +254,9 @@ evaltree(n, flags)
 	case NFOR:
 		evalfor(n);
 		break;
+	case NSELECT:
+		evalselect(n);
+		break;
 	case NCASE:
 		evalcase(n, flags);
 		break;
@@ -364,6 +369,109 @@ evalfor(n)
 	}
 	loopnest--;
 out:
+	popstackmark(&smark);
+}
+
+
+
+STATIC void
+evalselect(n)
+	union node *n;
+{
+	struct arglist arglist;
+	union node *argp;
+	struct strlist *sp;
+	struct stackmark smark;
+	int nitems, i;
+	char *reply;
+	char replybuf[256];
+	const char *ps3;
+
+	setstackmark(&smark);
+	arglist.lastp = &arglist.list;
+	for (argp = n->nfor.args ; argp ; argp = argp->narg.next) {
+		oexitstatus = exitstatus;
+		expandarg(argp, &arglist, EXP_FULL | EXP_TILDE);
+		if (evalskip)
+			goto selout;
+	}
+	*arglist.lastp = NULL;
+
+	nitems = 0;
+	for (sp = arglist.list ; sp ; sp = sp->next)
+		nitems++;
+
+	exitstatus = 0;
+	loopnest++;
+	for (;;) {
+		i = 1;
+		for (sp = arglist.list ; sp ; sp = sp->next, i++) {
+			outfmt(out2, "%d) %s\n", i, sp->text);
+		}
+		flushout(out2);
+
+		ps3 = lookupvar("PS3");
+		if (!ps3 || !*ps3)
+			ps3 = "#? ";
+		out2str(ps3);
+		flushout(out2);
+
+		reply = NULL;
+		if (isatty(0)) {
+			if (fgets(replybuf, sizeof replybuf, stdin) == NULL) {
+				out2str("\n");
+				break;
+			}
+			{
+				int rlen = (int)strlen(replybuf);
+				if (rlen > 0 && replybuf[rlen-1] == '\n')
+					replybuf[rlen-1] = '\0';
+			}
+			reply = replybuf;
+		} else {
+			if (fgets(replybuf, sizeof replybuf, stdin) == NULL)
+				break;
+			{
+				int rlen = (int)strlen(replybuf);
+				if (rlen > 0 && replybuf[rlen-1] == '\n')
+					replybuf[rlen-1] = '\0';
+			}
+			reply = replybuf;
+		}
+
+		setvar("REPLY", reply ? reply : "", 0);
+
+		if (reply && *reply) {
+			char *ep;
+			long idx = strtol(reply, &ep, 10);
+			if (*ep == '\0' && idx >= 1 && idx <= nitems) {
+				i = 1;
+				for (sp = arglist.list ; sp ; sp = sp->next, i++) {
+					if (i == (int)idx) {
+						setvar(n->nfor.var, sp->text, 0);
+						break;
+					}
+				}
+			} else {
+				setvar(n->nfor.var, "", 0);
+			}
+		} else {
+			setvar(n->nfor.var, "", 0);
+		}
+
+		evaltree(n->nfor.body, 0);
+		if (evalskip) {
+			if (evalskip == SKIPCONT && --skipcount <= 0) {
+				evalskip = 0;
+				continue;
+			}
+			if (evalskip == SKIPBREAK && --skipcount <= 0)
+				evalskip = 0;
+			break;
+		}
+	}
+	loopnest--;
+selout:
 	popstackmark(&smark);
 }
 

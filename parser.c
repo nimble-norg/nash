@@ -411,6 +411,43 @@ TRACE(("expecting DO got %s %s\n", tokname[got], got == TWORD ? wordtext : ""));
 			synexpect(t);
 		checkkwd = 1;
 		break;
+	case TSELECT:
+		if (readtoken() != TWORD || quoteflag || ! goodname(wordtext))
+			synerror("Bad select loop variable");
+		n1 = (union node *)stalloc(sizeof (struct nfor));
+		n1->type = NSELECT;
+		n1->nfor.var = wordtext;
+		if (readtoken() == TWORD && ! quoteflag && equal(wordtext, "in")) {
+			app = &ap;
+			while (readtoken() == TWORD) {
+				n2 = (union node *)stalloc(sizeof (struct narg));
+				n2->type = NARG;
+				n2->narg.text = wordtext;
+				n2->narg.backquote = backquotelist;
+				*app = n2;
+				app = &n2->narg.next;
+			}
+			*app = NULL;
+			n1->nfor.args = ap;
+			if (lasttoken != TNL && lasttoken != TSEMI)
+				synexpect(-1);
+		} else {
+			n1->nfor.args = NULL;
+			if (lasttoken != TNL && lasttoken != TSEMI)
+				tokpushback++;
+		}
+		checkkwd = 2;
+		if ((t = readtoken()) == TDO)
+			t = TDONE;
+		else if (t == TBEGIN)
+			t = TEND;
+		else
+			synexpect(-1);
+		n1->nfor.body = list(0);
+		if (readtoken() != t)
+			synexpect(t);
+		checkkwd = 1;
+		break;
 	case TCASE:
 		n1 = (union node *)stalloc(sizeof (struct ncase));
 		n1->type = NCASE;
@@ -2160,6 +2197,18 @@ getprompt(unused)
 		case 'r':
 			if (out < end) *out++ = '\r';
 			break;
+		case 's': {
+			const char *sh = "ash";
+			int n = (int)strlen(sh);
+			if (out+n < end) { memcpy(out, sh, n); out += n; }
+			break;
+		}
+		case 'v': {
+			const char *ver = "0.3";
+			int n = (int)strlen(ver);
+			if (out+n < end) { memcpy(out, ver, n); out += n; }
+			break;
+		}
 		case '\\':
 			if (out < end) *out++ = '\\';
 			break;

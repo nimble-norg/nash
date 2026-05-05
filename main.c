@@ -155,6 +155,8 @@ main(argc, argv)
 	init();
 	initpwd();
 	setstackmark(&smark);
+	if (argc > 0 && argv[0])
+		setvar("ASH", argv[0], VEXPORT);
 	procargs(argc, argv);
 	if (argv[0] && argv[0][0] == '-') {
 		state = 1;

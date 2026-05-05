@@ -94,6 +94,8 @@ NFOR nfor			# the for statement
 	body	  nodeptr		# do body; done
 	var	  string		# the for variable
 
+NSELECT nfor			# the select statement (same fields as NFOR)
+
 NCASE ncase			# a case statement
 	type	  int
 	expr	  nodeptr		# the word to switch on

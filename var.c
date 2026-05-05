@@ -38,6 +38,8 @@
 static char sccsid[] = "@(#)var.c	8.3 (Berkeley) 5/4/95";
 #endif /* not lint */
 
+#include <sys/ioctl.h>
+#include <stdio.h>
 #include <unistd.h>
 #include <stdlib.h>
 
@@ -83,8 +85,15 @@ struct var vmpath;
 struct var vpath;
 struct var vps1;
 struct var vps2;
+struct var vps3;
+struct var vps4;
 struct var vvers;
 struct var vshvers;
+struct var vash;
+struct var vhostname;
+struct var veuid;
+struct var vcolumns;
+struct var vlines;
 #if ATTY
 struct var vterm;
 #endif
@@ -103,6 +112,8 @@ const struct varinit varinit[] = {
 	{&vvers,        VSTRFIXED|VTEXTFIXED,           "SHELLVERS=ash 0.3"},
         {&vshvers,      VSTRFIXED|VTEXTFIXED,   	"ASH_VERSION=@(#)NIMBLE-ORG Almquist Shell 0.3"},
 	{&vps2,		VSTRFIXED|VTEXTFIXED,		"PS2=> "},
+	{&vps3,		VSTRFIXED|VTEXTFIXED,		"PS3=#? "},
+	{&vps4,		VSTRFIXED|VTEXTFIXED,		"PS4=+ "},
 #if ATTY
 	{&vterm,	VSTRFIXED|VTEXTFIXED|VUNSET,	"TERM="},
 #endif
@@ -164,6 +175,48 @@ initvar() {
 		*vpp = &vps1;
 		vps1.text = geteuid() ? "PS1=ash-0.3@ " : "PS1=ash-0.3# ";
 		vps1.flags = VSTRFIXED|VTEXTFIXED;
+	}
+	{
+		/* ASH: argv[0] of shell — set in main.c via setvar */
+		/* HOSTNAME */
+		if (!lookupvar("HOSTNAME")) {
+			char hbuf[256];
+			if (gethostname(hbuf, sizeof hbuf) == 0)
+				setvar("HOSTNAME", hbuf, VEXPORT);
+		}
+		/* EUID */
+		if (!lookupvar("EUID")) {
+			char ebuf[32];
+			snprintf(ebuf, sizeof ebuf, "%d", (int)geteuid());
+			setvar("EUID", ebuf, 0);
+		}
+		/* COLUMNS / LINES from terminal or defaults */
+		if (!lookupvar("COLUMNS") || !lookupvar("LINES")) {
+			struct winsize ws;
+			int got = 0;
+			int fd;
+			for (fd = 0; fd <= 2; fd++) {
+				if (ioctl(fd, TIOCGWINSZ, &ws) == 0
+				    && ws.ws_col > 0 && ws.ws_row > 0) {
+					got = 1;
+					break;
+				}
+			}
+			if (!got) {
+				ws.ws_col = 80;
+				ws.ws_row = 24;
+			}
+			if (!lookupvar("COLUMNS")) {
+				char cbuf[32];
+				snprintf(cbuf, sizeof cbuf, "%d", (int)ws.ws_col);
+				setvar("COLUMNS", cbuf, 0);
+			}
+			if (!lookupvar("LINES")) {
+				char cbuf[32];
+				snprintf(cbuf, sizeof cbuf, "%d", (int)ws.ws_row);
+				setvar("LINES", cbuf, 0);
+			}
+		}
 	}
 }
 
